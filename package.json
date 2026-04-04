@@ -45,6 +45,12 @@
         "icon": "$(export)"
       },
       {
+        "command": "revu.exportMarkdown",
+        "title": "Export as Markdown",
+        "category": "revu",
+        "icon": "$(markdown)"
+      },
+      {
         "command": "revu.clearComments",
         "title": "Clear all annotations",
         "category": "revu",
@@ -111,8 +117,13 @@
           "when": "view == revu.notes"
         },
         {
-          "command": "revu.clearComments",
+          "command": "revu.exportMarkdown",
           "group": "navigation@4",
+          "when": "view == revu.notes"
+        },
+        {
+          "command": "revu.clearComments",
+          "group": "navigation@5",
           "when": "view == revu.notes"
         }
       ]

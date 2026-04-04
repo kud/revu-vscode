@@ -58,6 +58,7 @@ export const activate = async (context: vscode.ExtensionContext) => {
     vscode.commands.registerCommand("revu.createNote", createNote),
     vscode.commands.registerCommand("revu.copyToClipboard", copyToClipboard),
     vscode.commands.registerCommand("revu.exportReview", exportReview),
+    vscode.commands.registerCommand("revu.exportMarkdown", exportMarkdown),
     vscode.commands.registerCommand("revu.clearComments", clearComments),
     vscode.commands.registerCommand("revu.goToNote", goToNote),
     vscode.commands.registerCommand("revu.cycleView", cycleView),
@@ -177,6 +178,28 @@ const copyToClipboard = async () => {
   }
   await vscode.env.clipboard.writeText(buildPayload())
   vscode.window.showInformationMessage("revu: review copied to clipboard.")
+}
+
+const exportMarkdown = async () => {
+  if (threads.length === 0) {
+    vscode.window.showInformationMessage("revu: no annotations to export.")
+    return
+  }
+  const folders = vscode.workspace.workspaceFolders
+  if (!folders) return
+
+  const prompt = await vscode.window.showInputBox({
+    prompt: "What should the AI do with these annotations?",
+    placeHolder: "e.g. Please fix all the issues listed below…",
+  })
+  if (prompt === undefined) return
+
+  const payload = prompt
+    ? `${prompt}\n\n${renderMarkdown(threads)}`
+    : buildPayload()
+  const uri = vscode.Uri.joinPath(folders[0].uri, ".revu-review.md")
+  await vscode.workspace.fs.writeFile(uri, Buffer.from(payload))
+  vscode.window.showTextDocument(uri)
 }
 
 const exportReview = async () => {
