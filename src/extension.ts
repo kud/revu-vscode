@@ -77,20 +77,33 @@ type StoredNote = {
   file: string
   startLine: number
   endLine: number
-  body: string
+  text: string
 }
+
+type StoreShape = {
+  prompt?: string
+  comments: StoredNote[]
+}
+
+const DEFAULT_PROMPT =
+  "Code review — inline annotations per file and line. " +
+  "Each annotation is an issue, question, or required change. " +
+  "Implement all changes."
+
+let savedPrompt = DEFAULT_PROMPT
 
 const saveToDisk = async () => {
   const uri = storeUri()
   if (!uri) return
-  const data: StoredNote[] = threads.flatMap((t) =>
+  const comments: StoredNote[] = threads.flatMap((t) =>
     t.comments.map((c) => ({
       file: vscode.workspace.asRelativePath(t.uri),
       startLine: t.range?.start.line ?? 0,
       endLine: t.range?.end.line ?? 0,
-      body: c.body instanceof vscode.MarkdownString ? c.body.value : c.body,
+      text: c.body instanceof vscode.MarkdownString ? c.body.value : c.body,
     })),
   )
+  const data: StoreShape = { prompt: savedPrompt, comments }
   await vscode.workspace.fs.writeFile(
     uri,
     Buffer.from(JSON.stringify(data, null, 2)),
@@ -102,16 +115,20 @@ const loadFromDisk = async () => {
   if (!uri) return
   try {
     const raw = await vscode.workspace.fs.readFile(uri)
-    const data: StoredNote[] = JSON.parse(raw.toString())
+    const parsed = JSON.parse(raw.toString())
+    const data: StoreShape = Array.isArray(parsed)
+      ? { comments: parsed.map((n: any) => ({ ...n, text: n.text ?? n.body })) }
+      : parsed
+    if (data.prompt) savedPrompt = data.prompt
     const folders = vscode.workspace.workspaceFolders!
-    for (const note of data) {
+    for (const note of data.comments ?? []) {
       const fileUri = vscode.Uri.joinPath(folders[0].uri, note.file)
       const thread = controller.createCommentThread(
         fileUri,
         new vscode.Range(note.startLine, 0, note.endLine, 0),
         [
           {
-            body: new vscode.MarkdownString(note.body),
+            body: new vscode.MarkdownString(note.text),
             mode: vscode.CommentMode.Preview,
             author: makeAuthor(),
           },
@@ -165,11 +182,7 @@ const createNote = (reply: vscode.CommentReply) => {
   trackThread(reply.thread)
 }
 
-const buildPayload = () =>
-  `Code review — inline annotations per file and line. ` +
-  `Each annotation is an issue, question, or required change. ` +
-  `Implement all changes.\n\n` +
-  renderMarkdown(threads)
+const buildPayload = () => `${savedPrompt}\n\n${renderMarkdown(threads)}`
 
 const copyToClipboard = async () => {
   if (threads.length === 0) {
@@ -191,12 +204,13 @@ const exportMarkdown = async () => {
   const prompt = await vscode.window.showInputBox({
     prompt: "What should the AI do with these annotations?",
     placeHolder: "e.g. Please fix all the issues listed below…",
+    value: savedPrompt,
   })
   if (prompt === undefined) return
 
-  const payload = prompt
-    ? `${prompt}\n\n${renderMarkdown(threads)}`
-    : buildPayload()
+  savedPrompt = prompt || DEFAULT_PROMPT
+  saveToDisk()
+  const payload = `${savedPrompt}\n\n${renderMarkdown(threads)}`
   const uri = vscode.Uri.joinPath(folders[0].uri, "revu-review.md")
   await vscode.workspace.fs.writeFile(uri, Buffer.from(payload))
   vscode.window.showTextDocument(uri)

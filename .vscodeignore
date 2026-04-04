@@ -1,4 +1,5 @@
 src/
+CLAUDE.md
 node_modules/
 .vscode/
 .gitignore
