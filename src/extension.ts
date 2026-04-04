@@ -3,6 +3,26 @@ import * as vscode from "vscode"
 const CONTROLLER_ID = "revu"
 const CONTROLLER_LABEL = "revu"
 
+const AI_EXTENSIONS = [
+  {
+    id: "anthropic.claude-code",
+    label: "$(anthropic) Send to Claude Code",
+    action: "claude",
+  },
+  {
+    id: "GitHub.copilot-chat",
+    label: "$(comment-discussion) Send to Copilot Chat",
+    action: "copilot",
+  },
+  {
+    id: "Continue.continue",
+    label: "$(hubot) Send to Continue",
+    action: "continue",
+  },
+]
+
+const isInstalled = (id: string) => !!vscode.extensions.getExtension(id)
+
 let controller: vscode.CommentController
 let statusBar: vscode.StatusBarItem
 let notesProvider: RevuNotesProvider
@@ -32,6 +52,7 @@ export const activate = (context: vscode.ExtensionContext) => {
     statusBar,
     vscode.window.registerTreeDataProvider("revu.notes", notesProvider),
     vscode.commands.registerCommand("revu.addComment", addComment),
+    vscode.commands.registerCommand("revu.createNote", createNote),
     vscode.commands.registerCommand("revu.copyToClipboard", copyToClipboard),
     vscode.commands.registerCommand("revu.exportReview", exportReview),
     vscode.commands.registerCommand("revu.clearComments", clearComments),
@@ -41,29 +62,21 @@ export const activate = (context: vscode.ExtensionContext) => {
   refresh()
 }
 
-const addComment = async () => {
-  const editor = vscode.window.activeTextEditor
-  if (!editor) return
+const addComment = () => {
+  vscode.commands.executeCommand("workbench.action.addComment")
+}
 
-  const line = editor.selection.active.line
-  const body = await vscode.window.showInputBox({
-    prompt: `Annotation for line ${line + 1}`,
-    placeHolder: "Your annotation…",
-  })
-  if (!body) return
-
-  const range = new vscode.Range(line, 0, line, 0)
+const createNote = (reply: vscode.CommentReply) => {
   const comment: vscode.Comment = {
-    body: new vscode.MarkdownString(body),
+    body: new vscode.MarkdownString(reply.text),
     mode: vscode.CommentMode.Preview,
     author: { name: "revu" },
   }
-  const thread = controller.createCommentThread(editor.document.uri, range, [
-    comment,
-  ])
-  thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
-  thread.canReply = false
+  reply.thread.comments = [comment]
+  reply.thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
+  reply.thread.canReply = false
 
+  const thread = reply.thread
   const originalDispose = thread.dispose.bind(thread)
   thread.dispose = () => {
     threads.splice(threads.indexOf(thread), 1)
@@ -75,27 +88,42 @@ const addComment = async () => {
   refresh()
 }
 
+const askPrompt = async (): Promise<string | undefined> => {
+  return vscode.window.showInputBox({
+    prompt: "What should the AI do with this review?",
+    placeHolder: "e.g. Fix these issues, explain your choices…",
+    value: "Please review and fix the following annotations:",
+  })
+}
+
+const buildPayload = (prompt: string) =>
+  `${prompt}\n\n${renderMarkdown(threads)}`
+
 const copyToClipboard = async () => {
   if (threads.length === 0) {
-    vscode.window.showInformationMessage("revu: no comments to copy.")
+    vscode.window.showInformationMessage("revu: no annotations to copy.")
     return
   }
-  await vscode.env.clipboard.writeText(renderMarkdown(threads))
+  const prompt = await askPrompt()
+  if (prompt === undefined) return
+  await vscode.env.clipboard.writeText(buildPayload(prompt))
   vscode.window.showInformationMessage("revu: review copied to clipboard.")
 }
 
 const exportReview = async () => {
   if (threads.length === 0) {
-    vscode.window.showInformationMessage("revu: no comments to export.")
+    vscode.window.showInformationMessage("revu: no annotations to export.")
     return
   }
 
-  const markdown = renderMarkdown(threads)
+  const aiOptions = AI_EXTENSIONS.filter((e) => isInstalled(e.id)).map((e) => ({
+    label: e.label,
+    id: e.action,
+  }))
 
   const choice = await vscode.window.showQuickPick(
     [
-      { label: "$(anthropic) Send to Claude Code", id: "claude" },
-      { label: "$(comment-discussion) Send to Copilot Chat", id: "copilot" },
+      ...aiOptions,
       { label: "$(globe) Send to ChatGPT", id: "chatgpt" },
       { label: "$(terminal) Send to opencode", id: "opencode" },
       { label: "$(clippy) Copy to clipboard", id: "clipboard" },
@@ -106,18 +134,25 @@ const exportReview = async () => {
 
   if (!choice) return
 
+  const prompt = await askPrompt()
+  if (prompt === undefined) return
+
+  const payload = buildPayload(prompt)
+
   if (choice.id === "claude") {
     await vscode.commands.executeCommand("claude-vscode.sidebar.open")
     await vscode.commands.executeCommand(
       "claude-vscode.insertAtMention",
-      markdown,
+      payload,
     )
   } else if (choice.id === "copilot") {
     vscode.commands.executeCommand("workbench.action.chat.open", {
-      query: markdown,
+      query: payload,
     })
+  } else if (choice.id === "continue") {
+    vscode.commands.executeCommand("continue.acceptDiff", payload)
   } else if (choice.id === "chatgpt") {
-    await vscode.env.clipboard.writeText(markdown)
+    await vscode.env.clipboard.writeText(payload)
     vscode.env.openExternal(vscode.Uri.parse("https://chat.openai.com"))
     vscode.window.showInformationMessage(
       "revu: review copied — paste it in ChatGPT.",
@@ -125,22 +160,22 @@ const exportReview = async () => {
   } else if (choice.id === "opencode") {
     const terminal = vscode.window.createTerminal("revu → opencode")
     terminal.show()
-    terminal.sendText(`opencode << 'REVU'\n${markdown}\nREVU`)
+    terminal.sendText(`opencode << 'REVU'\n${payload}\nREVU`)
   } else if (choice.id === "clipboard") {
-    await vscode.env.clipboard.writeText(markdown)
+    await vscode.env.clipboard.writeText(payload)
     vscode.window.showInformationMessage("revu: review copied to clipboard.")
   } else if (choice.id === "file") {
     const folders = vscode.workspace.workspaceFolders
     if (!folders) return
     const uri = vscode.Uri.joinPath(folders[0].uri, ".revu-review.md")
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(markdown))
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(payload))
     vscode.window.showTextDocument(uri)
   }
 }
 
 const clearComments = () => {
   ;[...threads].forEach((t) => t.dispose())
-  vscode.window.showInformationMessage("revu: all comments cleared.")
+  vscode.window.showInformationMessage("revu: all annotations cleared.")
 }
 
 const goToNote = (item: NoteItem) => {

@@ -27,6 +27,12 @@
         "icon": "$(comment-add)"
       },
       {
+        "command": "revu.createNote",
+        "title": "Start Discussion",
+        "category": "revu",
+        "enablement": "!commentIsEmpty"
+      },
+      {
         "command": "revu.copyToClipboard",
         "title": "Copy to Clipboard",
         "category": "revu",
@@ -73,6 +79,13 @@
         {
           "command": "revu.addComment",
           "group": "revu"
+        }
+      ],
+      "comments/commentThread/context": [
+        {
+          "command": "revu.createNote",
+          "when": "commentController == revu && !comment",
+          "group": "inline"
         }
       ],
       "view/title": [
