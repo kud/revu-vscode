@@ -31,6 +31,8 @@ git add package.json
 git commit -m "🔖 chore(release): bump to $version"
 git tag "v$version"
 git push && git push --tags
-echo "Released v$version — publish workflow triggered."
+echo "Released v$version — building .vsix and opening marketplace…"
+npm run build && npm run package
+open https://marketplace.visualstudio.com/manage/publishers/kud
 """
-description = "Bump version (patch|minor|major), tag, and push to trigger publish"
+description = "Bump version, tag, push, build .vsix, and open marketplace to upload"
