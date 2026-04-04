@@ -166,9 +166,9 @@ const createNote = (reply: vscode.CommentReply) => {
 }
 
 const buildPayload = () =>
-  `The following is a code review with inline annotations. ` +
-  `Each annotation is attached to a specific file and line number and describes an issue, a question, or an improvement to make. ` +
-  `Please read every annotation carefully and implement all the requested changes in the code.\n\n` +
+  `Code review — inline annotations per file and line. ` +
+  `Each annotation is an issue, question, or required change. ` +
+  `Implement all changes.\n\n` +
   renderMarkdown(threads)
 
 const copyToClipboard = async () => {
