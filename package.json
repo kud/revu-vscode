@@ -39,6 +39,23 @@
         "icon": "$(trash)"
       }
     ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "revu",
+          "title": "revu",
+          "icon": "assets/revu-logo.svg"
+        }
+      ]
+    },
+    "views": {
+      "revu": [
+        {
+          "id": "revu.notes",
+          "name": "Notes"
+        }
+      ]
+    },
     "menus": {
       "editor/title": [
         {

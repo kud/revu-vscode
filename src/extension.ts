@@ -5,6 +5,7 @@ const CONTROLLER_LABEL = "revu"
 
 let controller: vscode.CommentController
 let statusBar: vscode.StatusBarItem
+let notesProvider: RevuNotesProvider
 const threads: vscode.CommentThread[] = []
 
 export const activate = (context: vscode.ExtensionContext) => {
@@ -23,15 +24,20 @@ export const activate = (context: vscode.ExtensionContext) => {
     100,
   )
   statusBar.command = "revu.exportReview"
-  updateStatusBar()
+
+  notesProvider = new RevuNotesProvider()
 
   context.subscriptions.push(
     controller,
     statusBar,
+    vscode.window.registerTreeDataProvider("revu.notes", notesProvider),
     vscode.commands.registerCommand("revu.addComment", addComment),
     vscode.commands.registerCommand("revu.exportReview", exportReview),
     vscode.commands.registerCommand("revu.clearComments", clearComments),
+    vscode.commands.registerCommand("revu.goToNote", goToNote),
   )
+
+  refresh()
 }
 
 const addComment = () => {
@@ -48,11 +54,11 @@ const addComment = () => {
   thread.dispose = () => {
     threads.splice(threads.indexOf(thread), 1)
     originalDispose()
-    updateStatusBar()
+    refresh()
   }
 
   threads.push(thread)
-  updateStatusBar()
+  refresh()
 
   vscode.commands.executeCommand("workbench.action.addComment")
 }
@@ -98,6 +104,17 @@ const clearComments = () => {
   vscode.window.showInformationMessage("revu: all comments cleared.")
 }
 
+const goToNote = (item: NoteItem) => {
+  vscode.window.showTextDocument(item.thread.uri, {
+    selection: item.thread.range,
+  })
+}
+
+const refresh = () => {
+  notesProvider.refresh()
+  updateStatusBar()
+}
+
 const updateStatusBar = () => {
   const count = threads.length
   if (count === 0) {
@@ -134,6 +151,47 @@ const renderMarkdown = (commentThreads: vscode.CommentThread[]): string => {
       return `## ${file}\n\n${lines.join("\n")}`
     })
     .join("\n\n")
+}
+
+class RevuNotesProvider implements vscode.TreeDataProvider<NoteItem> {
+  private _onDidChangeTreeData = new vscode.EventEmitter<void>()
+  readonly onDidChangeTreeData = this._onDidChangeTreeData.event
+
+  refresh() {
+    this._onDidChangeTreeData.fire()
+  }
+
+  getTreeItem(element: NoteItem) {
+    return element
+  }
+
+  getChildren(): NoteItem[] {
+    return threads.map((thread) => new NoteItem(thread))
+  }
+}
+
+class NoteItem extends vscode.TreeItem {
+  constructor(public readonly thread: vscode.CommentThread) {
+    const file = vscode.workspace.asRelativePath(thread.uri)
+    const line = (thread.range?.start.line ?? 0) + 1
+    const firstComment = thread.comments[0]
+    const preview = firstComment
+      ? (firstComment.body instanceof vscode.MarkdownString
+          ? firstComment.body.value
+          : firstComment.body
+        ).slice(0, 60)
+      : "…"
+
+    super(`${file}:${line}`, vscode.TreeItemCollapsibleState.None)
+    this.description = preview
+    this.tooltip = preview
+    this.iconPath = new vscode.ThemeIcon("comment")
+    this.command = {
+      command: "revu.goToNote",
+      title: "Go to note",
+      arguments: [this],
+    }
+  }
 }
 
 export const deactivate = () => {}
