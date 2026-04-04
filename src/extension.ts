@@ -63,6 +63,13 @@ export const activate = (context: vscode.ExtensionContext) => {
 }
 
 const addComment = () => {
+  const editor = vscode.window.activeTextEditor
+  if (!editor) return
+  const { start, end } = editor.selection
+  const range = new vscode.Range(start.line, 0, end.line, 0)
+  const thread = controller.createCommentThread(editor.document.uri, range, [])
+  thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded
+  thread.canReply = false
   vscode.commands.executeCommand("workbench.action.addComment")
 }
 
@@ -70,7 +77,7 @@ const createNote = (reply: vscode.CommentReply) => {
   const comment: vscode.Comment = {
     body: new vscode.MarkdownString(reply.text),
     mode: vscode.CommentMode.Preview,
-    author: { name: "revu" },
+    author: { name: "{revu}" },
   }
   reply.thread.comments = [comment]
   reply.thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
