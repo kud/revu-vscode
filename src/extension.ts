@@ -97,35 +97,31 @@ const saveToDisk = async () => {
 }
 
 const loadFromDisk = async () => {
-  const folders = vscode.workspace.workspaceFolders
-  if (!folders) return
-  const files = (
-    await vscode.workspace.findFiles("{.revu*,revu*}.json", null, 20)
-  ).filter((f) => !vscode.workspace.asRelativePath(f).includes("/"))
-  for (const fileUri of files) {
-    try {
-      const raw = await vscode.workspace.fs.readFile(fileUri)
-      const data: StoredNote[] = JSON.parse(raw.toString())
-      for (const note of data) {
-        const uri = vscode.Uri.joinPath(folders[0].uri, note.file)
-        const thread = controller.createCommentThread(
-          uri,
-          new vscode.Range(note.startLine, 0, note.endLine, 0),
-          [
-            {
-              body: new vscode.MarkdownString(note.body),
-              mode: vscode.CommentMode.Preview,
-              author: makeAuthor(),
-            },
-          ],
-        )
-        thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
-        thread.canReply = false
-        trackThread(thread)
-      }
-    } catch {
-      // skip unreadable or incompatible files
+  const uri = storeUri()
+  if (!uri) return
+  try {
+    const raw = await vscode.workspace.fs.readFile(uri)
+    const data: StoredNote[] = JSON.parse(raw.toString())
+    const folders = vscode.workspace.workspaceFolders!
+    for (const note of data) {
+      const fileUri = vscode.Uri.joinPath(folders[0].uri, note.file)
+      const thread = controller.createCommentThread(
+        fileUri,
+        new vscode.Range(note.startLine, 0, note.endLine, 0),
+        [
+          {
+            body: new vscode.MarkdownString(note.body),
+            mode: vscode.CommentMode.Preview,
+            author: makeAuthor(),
+          },
+        ],
+      )
+      thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
+      thread.canReply = false
+      trackThread(thread)
     }
+  } catch {
+    // no file yet — fresh session
   }
 }
 
