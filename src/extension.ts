@@ -127,7 +127,7 @@ const loadFromDisk = async () => {
 }
 
 const makeAuthor = (): vscode.CommentAuthorInformation => ({
-  name: "",
+  name: "revu · Annotation",
   iconPath: vscode.Uri.joinPath(extensionUri, "assets", "revu-logo.png"),
 })
 
