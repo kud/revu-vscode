@@ -1,5 +1,8 @@
 src/
 node_modules/
+.vscode/
 .gitignore
 tsconfig.json
+mise.toml
+package-lock.json
 *.vsix
