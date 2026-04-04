@@ -46,14 +46,15 @@
     }
   },
   "scripts": {
-    "build": "bun build src/extension.ts --outfile dist/extension.js --target node --format cjs --external vscode",
-    "watch": "bun run build --watch",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
-    "package": "bunx @vscode/vsce package --no-dependencies"
+    "package": "npx @vscode/vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/node": "^22",
     "@types/vscode": "^1.90.0",
+    "esbuild": "^0.25",
     "typescript": "^5"
   }
 }
