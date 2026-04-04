@@ -16,3 +16,17 @@ description = "Build, package, and install the extension in VSCode"
 [tasks.typecheck]
 run = "npm run typecheck"
 description = "Type-check without emitting"
+
+[tasks.release]
+run = """
+#!/usr/bin/env zsh
+bump=${1:-patch}
+npm version $bump --no-git-tag-version
+version=$(node -p "require('./package.json').version")
+git add package.json
+git commit -m "🔖 chore(release): bump to $version"
+git tag "v$version"
+git push && git push --tags
+echo "Released v$version — publish workflow triggered."
+"""
+description = "Bump version (patch|minor|major), tag, and push to trigger publish"
