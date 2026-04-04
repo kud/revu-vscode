@@ -1,7 +1,6 @@
 import * as vscode from "vscode"
 
 const CONTROLLER_ID = "revu"
-const CONTROLLER_LABEL = "revu"
 
 const AI_EXTENSIONS = [
   {
@@ -21,15 +20,8 @@ const AI_EXTENSIONS = [
   },
 ]
 
-const isInstalled = (id: string) => !!vscode.extensions.getExtension(id)
-
 type ViewMode = "flat" | "grouped" | "tree"
 const VIEW_MODES: ViewMode[] = ["flat", "grouped", "tree"]
-const VIEW_MODE_ICONS: Record<ViewMode, string> = {
-  flat: "$(list-unordered)",
-  grouped: "$(list-tree)",
-  tree: "$(type-hierarchy)",
-}
 
 let controller: vscode.CommentController
 let statusBar: vscode.StatusBarItem
@@ -42,7 +34,7 @@ export const activate = (context: vscode.ExtensionContext) => {
   extensionUri = context.extensionUri
   controller = vscode.comments.createCommentController(
     CONTROLLER_ID,
-    CONTROLLER_LABEL,
+    CONTROLLER_ID,
   )
   controller.commentingRangeProvider = {
     provideCommentingRanges: (document) => [
@@ -74,48 +66,72 @@ export const activate = (context: vscode.ExtensionContext) => {
   refresh()
 }
 
-const addComment = () => {
-  const editor = vscode.window.activeTextEditor
-  if (!editor) return
-  const { start, end } = editor.selection
-  const range = new vscode.Range(start.line, 0, end.line, 0)
-  const thread = controller.createCommentThread(editor.document.uri, range, [])
-  thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded
-  thread.canReply = false
-  vscode.commands.executeCommand("workbench.action.addComment")
-}
+const makeAuthor = (): vscode.CommentAuthorInformation => ({
+  name: "{revu}",
+  iconPath: vscode.Uri.joinPath(extensionUri, "assets", "revu-logo.png"),
+})
 
-const createNote = (reply: vscode.CommentReply) => {
-  const comment: vscode.Comment = {
-    body: new vscode.MarkdownString(reply.text),
-    mode: vscode.CommentMode.Preview,
-    author: {
-      name: "{revu}",
-      iconPath: vscode.Uri.joinPath(extensionUri, "assets", "revu-logo.png"),
-    },
-  }
-  reply.thread.comments = [comment]
-  reply.thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
-  reply.thread.canReply = false
-
-  const thread = reply.thread
-  const originalDispose = thread.dispose.bind(thread)
+const trackThread = (thread: vscode.CommentThread) => {
+  const original = thread.dispose.bind(thread)
   thread.dispose = () => {
     threads.splice(threads.indexOf(thread), 1)
-    originalDispose()
+    original()
     refresh()
   }
-
   threads.push(thread)
   refresh()
 }
 
-const buildPayload = () => `\
-The following is a code review with inline annotations. \
-Each annotation is attached to a specific file and line number and describes an issue, a question, or an improvement to make. \
-Please read every annotation carefully and implement all the requested changes in the code.
+const addComment = async () => {
+  const editor = vscode.window.activeTextEditor
+  if (!editor) return
 
-${renderMarkdown(threads)}`
+  const { start, end } = editor.selection
+  const lineInfo =
+    start.line === end.line
+      ? `line ${start.line + 1}`
+      : `lines ${start.line + 1}–${end.line + 1}`
+
+  const body = await vscode.window.showInputBox({
+    prompt: `Annotation for ${lineInfo}`,
+    placeHolder: "Your annotation…",
+  })
+  if (!body) return
+
+  const thread = controller.createCommentThread(
+    editor.document.uri,
+    new vscode.Range(start.line, 0, end.line, 0),
+    [
+      {
+        body: new vscode.MarkdownString(body),
+        mode: vscode.CommentMode.Preview,
+        author: makeAuthor(),
+      },
+    ],
+  )
+  thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
+  thread.canReply = false
+  trackThread(thread)
+}
+
+const createNote = (reply: vscode.CommentReply) => {
+  reply.thread.comments = [
+    {
+      body: new vscode.MarkdownString(reply.text),
+      mode: vscode.CommentMode.Preview,
+      author: makeAuthor(),
+    },
+  ]
+  reply.thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
+  reply.thread.canReply = false
+  trackThread(reply.thread)
+}
+
+const buildPayload = () =>
+  `The following is a code review with inline annotations. ` +
+  `Each annotation is attached to a specific file and line number and describes an issue, a question, or an improvement to make. ` +
+  `Please read every annotation carefully and implement all the requested changes in the code.\n\n` +
+  renderMarkdown(threads)
 
 const copyToClipboard = async () => {
   if (threads.length === 0) {
@@ -132,10 +148,9 @@ const exportReview = async () => {
     return
   }
 
-  const aiOptions = AI_EXTENSIONS.filter((e) => isInstalled(e.id)).map((e) => ({
-    label: e.label,
-    id: e.action,
-  }))
+  const aiOptions = AI_EXTENSIONS.filter(
+    (e) => !!vscode.extensions.getExtension(e.id),
+  ).map((e) => ({ label: e.label, id: e.action }))
 
   const choice = await vscode.window.showQuickPick(
     [
@@ -147,42 +162,51 @@ const exportReview = async () => {
     ],
     { title: "Send review to…" },
   )
-
   if (!choice) return
 
   const payload = buildPayload()
 
-  if (choice.id === "claude") {
-    await vscode.commands.executeCommand("claude-vscode.sidebar.open")
-    await vscode.commands.executeCommand(
-      "claude-vscode.insertAtMention",
-      payload,
-    )
-  } else if (choice.id === "copilot") {
-    vscode.commands.executeCommand("workbench.action.chat.open", {
-      query: payload,
-    })
-  } else if (choice.id === "continue") {
-    vscode.commands.executeCommand("continue.acceptDiff", payload)
-  } else if (choice.id === "chatgpt") {
-    await vscode.env.clipboard.writeText(payload)
-    vscode.env.openExternal(vscode.Uri.parse("https://chat.openai.com"))
-    vscode.window.showInformationMessage(
-      "revu: review copied — paste it in ChatGPT.",
-    )
-  } else if (choice.id === "opencode") {
-    const terminal = vscode.window.createTerminal("revu → opencode")
-    terminal.show()
-    terminal.sendText(`opencode << 'REVU'\n${payload}\nREVU`)
-  } else if (choice.id === "clipboard") {
-    await vscode.env.clipboard.writeText(payload)
-    vscode.window.showInformationMessage("revu: review copied to clipboard.")
-  } else if (choice.id === "file") {
-    const folders = vscode.workspace.workspaceFolders
-    if (!folders) return
-    const uri = vscode.Uri.joinPath(folders[0].uri, ".revu-review.md")
-    await vscode.workspace.fs.writeFile(uri, Buffer.from(payload))
-    vscode.window.showTextDocument(uri)
+  switch (choice.id) {
+    case "claude":
+      await vscode.commands.executeCommand("claude-vscode.sidebar.open")
+      await vscode.commands.executeCommand(
+        "claude-vscode.insertAtMention",
+        payload,
+      )
+      break
+    case "copilot":
+      vscode.commands.executeCommand("workbench.action.chat.open", {
+        query: payload,
+      })
+      break
+    case "continue":
+      vscode.commands.executeCommand("continue.sendMainUserMessage", payload)
+      break
+    case "chatgpt":
+      await vscode.env.clipboard.writeText(payload)
+      vscode.env.openExternal(vscode.Uri.parse("https://chat.openai.com"))
+      vscode.window.showInformationMessage(
+        "revu: review copied — paste it in ChatGPT.",
+      )
+      break
+    case "opencode": {
+      const terminal = vscode.window.createTerminal("revu → opencode")
+      terminal.show()
+      terminal.sendText(`opencode << 'REVU'\n${payload}\nREVU`)
+      break
+    }
+    case "clipboard":
+      await vscode.env.clipboard.writeText(payload)
+      vscode.window.showInformationMessage("revu: review copied to clipboard.")
+      break
+    case "file": {
+      const folders = vscode.workspace.workspaceFolders
+      if (!folders) return
+      const uri = vscode.Uri.joinPath(folders[0].uri, ".revu-review.md")
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(payload))
+      vscode.window.showTextDocument(uri)
+      break
+    }
   }
 }
 
@@ -198,18 +222,12 @@ const goToNote = (item: NoteItem) => {
 }
 
 const cycleView = () => {
-  const next =
-    VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length]
-  viewMode = next
+  viewMode = VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length]
   refresh()
 }
 
 const refresh = () => {
   notesProvider.refresh()
-  updateStatusBar()
-}
-
-const updateStatusBar = () => {
   const count = threads.length
   if (count === 0) {
     statusBar.hide()
@@ -222,7 +240,6 @@ const updateStatusBar = () => {
 
 const renderMarkdown = (commentThreads: vscode.CommentThread[]): string => {
   const byFile = new Map<string, { line: number; body: string }[]>()
-
   for (const thread of commentThreads) {
     const file = vscode.workspace.asRelativePath(thread.uri)
     if (!byFile.has(file)) byFile.set(file, [])
@@ -236,7 +253,6 @@ const renderMarkdown = (commentThreads: vscode.CommentThread[]): string => {
         .push({ line: (thread.range?.start.line ?? 0) + 1, body })
     }
   }
-
   return Array.from(byFile.entries())
     .map(([file, comments]) => {
       const lines = comments.map(
@@ -245,48 +261,6 @@ const renderMarkdown = (commentThreads: vscode.CommentThread[]): string => {
       return `## ${file}\n\n${lines.join("\n")}`
     })
     .join("\n\n")
-}
-
-type TreeNode = NoteItem | GroupItem
-
-class RevuNotesProvider implements vscode.TreeDataProvider<TreeNode> {
-  private _onDidChangeTreeData = new vscode.EventEmitter<void>()
-  readonly onDidChangeTreeData = this._onDidChangeTreeData.event
-
-  refresh() {
-    this._onDidChangeTreeData.fire()
-  }
-
-  getTreeItem(element: TreeNode) {
-    return element
-  }
-
-  getChildren(element?: TreeNode): TreeNode[] {
-    if (viewMode === "flat") {
-      if (element) return []
-      return threads.map((t) => new NoteItem(t, false))
-    }
-
-    if (viewMode === "grouped") {
-      if (element instanceof GroupItem) {
-        return element.threads.map((t) => new NoteItem(t, true))
-      }
-      return groupByFile(threads).map(
-        ([file, ts]) => new GroupItem(file, ts, false),
-      )
-    }
-
-    // tree mode — group by directory segments
-    if (element instanceof GroupItem && element.isDir) {
-      return element.threads.length
-        ? [new GroupItem(element.label as string, element.threads, false)]
-        : []
-    }
-    if (element instanceof GroupItem) {
-      return element.threads.map((t) => new NoteItem(t, true))
-    }
-    return buildDirTree(threads)
-  }
 }
 
 const groupByFile = (
@@ -316,6 +290,46 @@ const buildDirTree = (ts: vscode.CommentThread[]): GroupItem[] => {
   )
 }
 
+type TreeNode = NoteItem | GroupItem
+
+class RevuNotesProvider implements vscode.TreeDataProvider<TreeNode> {
+  private _onDidChangeTreeData = new vscode.EventEmitter<void>()
+  readonly onDidChangeTreeData = this._onDidChangeTreeData.event
+
+  refresh() {
+    this._onDidChangeTreeData.fire()
+  }
+
+  getTreeItem(element: TreeNode) {
+    return element
+  }
+
+  getChildren(element?: TreeNode): TreeNode[] {
+    if (viewMode === "flat") {
+      return element ? [] : threads.map((t) => new NoteItem(t, false))
+    }
+
+    if (viewMode === "grouped") {
+      if (element instanceof GroupItem)
+        return element.threads.map((t) => new NoteItem(t, true))
+      return groupByFile(threads).map(
+        ([file, ts]) => new GroupItem(file, ts, false),
+      )
+    }
+
+    // tree: dir nodes at root, file groups inside dirs
+    if (!element) return buildDirTree(threads)
+    if (element instanceof GroupItem && element.isDir) {
+      return groupByFile(element.threads).map(
+        ([file, ts]) => new GroupItem(file.split("/").pop()!, ts, false),
+      )
+    }
+    if (element instanceof GroupItem)
+      return element.threads.map((t) => new NoteItem(t, true))
+    return []
+  }
+}
+
 class GroupItem extends vscode.TreeItem {
   constructor(
     label: string,
@@ -343,9 +357,11 @@ class NoteItem extends vscode.TreeItem {
         ).slice(0, 60)
       : "…"
 
-    const label = fileInDescription ? `line ${line}` : `${file}:${line}`
-    super(label, vscode.TreeItemCollapsibleState.None)
-    this.description = fileInDescription ? preview : `  ${preview}`
+    super(
+      fileInDescription ? `line ${line}` : `${file}:${line}`,
+      vscode.TreeItemCollapsibleState.None,
+    )
+    this.description = preview
     this.tooltip = preview
     this.iconPath = new vscode.ThemeIcon("comment")
     this.command = {
