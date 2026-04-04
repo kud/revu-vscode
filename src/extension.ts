@@ -197,7 +197,7 @@ const exportMarkdown = async () => {
   const payload = prompt
     ? `${prompt}\n\n${renderMarkdown(threads)}`
     : buildPayload()
-  const uri = vscode.Uri.joinPath(folders[0].uri, ".revu-review.md")
+  const uri = vscode.Uri.joinPath(folders[0].uri, "revu-review.md")
   await vscode.workspace.fs.writeFile(uri, Buffer.from(payload))
   vscode.window.showTextDocument(uri)
 }
@@ -262,7 +262,7 @@ const exportReview = async () => {
     case "file": {
       const folders = vscode.workspace.workspaceFolders
       if (!folders) return
-      const uri = vscode.Uri.joinPath(folders[0].uri, ".revu-review.md")
+      const uri = vscode.Uri.joinPath(folders[0].uri, "revu-review.md")
       await vscode.workspace.fs.writeFile(uri, Buffer.from(payload))
       vscode.window.showTextDocument(uri)
       break
