@@ -44,7 +44,7 @@
         {
           "id": "revu",
           "title": "revu",
-          "icon": "assets/revu-logo.svg"
+          "icon": "assets/revu-icon.svg"
         }
       ]
     },
@@ -61,12 +61,12 @@
         {
           "command": "revu.addComment",
           "group": "navigation",
-          "when": "editorIsOpen"
+          "when": "editorFocus"
         },
         {
           "command": "revu.exportReview",
           "group": "navigation",
-          "when": "editorIsOpen"
+          "when": "editorFocus"
         }
       ],
       "editor/context": [

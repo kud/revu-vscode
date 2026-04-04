@@ -6,3 +6,4 @@ tsconfig.json
 mise.toml
 package-lock.json
 *.vsix
+assets/revu-logo.svg
