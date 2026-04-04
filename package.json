@@ -23,20 +23,35 @@
       {
         "command": "revu.addComment",
         "title": "Add Comment",
-        "category": "revu"
+        "category": "revu",
+        "icon": "$(comment-add)"
       },
       {
         "command": "revu.exportReview",
         "title": "Export Review",
-        "category": "revu"
+        "category": "revu",
+        "icon": "$(export)"
       },
       {
         "command": "revu.clearComments",
         "title": "Clear All Comments",
-        "category": "revu"
+        "category": "revu",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
+      "editor/title": [
+        {
+          "command": "revu.addComment",
+          "group": "navigation",
+          "when": "editorIsOpen"
+        },
+        {
+          "command": "revu.exportReview",
+          "group": "navigation",
+          "when": "editorIsOpen"
+        }
+      ],
       "editor/context": [
         {
           "command": "revu.addComment",

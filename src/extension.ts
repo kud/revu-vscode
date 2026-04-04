@@ -4,6 +4,8 @@ const CONTROLLER_ID = "revu"
 const CONTROLLER_LABEL = "revu"
 
 let controller: vscode.CommentController
+let statusBar: vscode.StatusBarItem
+const threads: vscode.CommentThread[] = []
 
 export const activate = (context: vscode.ExtensionContext) => {
   controller = vscode.comments.createCommentController(
@@ -16,8 +18,16 @@ export const activate = (context: vscode.ExtensionContext) => {
     ],
   }
 
+  statusBar = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Right,
+    100,
+  )
+  statusBar.command = "revu.exportReview"
+  updateStatusBar()
+
   context.subscriptions.push(
     controller,
+    statusBar,
     vscode.commands.registerCommand("revu.addComment", addComment),
     vscode.commands.registerCommand("revu.exportReview", exportReview),
     vscode.commands.registerCommand("revu.clearComments", clearComments),
@@ -34,11 +44,20 @@ const addComment = () => {
   thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded
   thread.canReply = false
 
+  const originalDispose = thread.dispose.bind(thread)
+  thread.dispose = () => {
+    threads.splice(threads.indexOf(thread), 1)
+    originalDispose()
+    updateStatusBar()
+  }
+
+  threads.push(thread)
+  updateStatusBar()
+
   vscode.commands.executeCommand("workbench.action.addComment")
 }
 
 const exportReview = async () => {
-  const threads = collectThreads()
   if (threads.length === 0) {
     vscode.window.showInformationMessage("revu: no comments to export.")
     return
@@ -75,18 +94,25 @@ const exportReview = async () => {
 }
 
 const clearComments = () => {
-  collectThreads().forEach((t) => t.dispose())
+  ;[...threads].forEach((t) => t.dispose())
   vscode.window.showInformationMessage("revu: all comments cleared.")
 }
 
-const collectThreads = (): vscode.CommentThread[] => {
-  return (controller as any)._threads ?? []
+const updateStatusBar = () => {
+  const count = threads.length
+  if (count === 0) {
+    statusBar.hide()
+    return
+  }
+  statusBar.text = `$(comment) ${count} revu note${count === 1 ? "" : "s"}`
+  statusBar.tooltip = "revu: click to export review"
+  statusBar.show()
 }
 
-const renderMarkdown = (threads: vscode.CommentThread[]): string => {
+const renderMarkdown = (commentThreads: vscode.CommentThread[]): string => {
   const byFile = new Map<string, { line: number; body: string }[]>()
 
-  for (const thread of threads) {
+  for (const thread of commentThreads) {
     const file = vscode.workspace.asRelativePath(thread.uri)
     if (!byFile.has(file)) byFile.set(file, [])
     for (const comment of thread.comments) {
