@@ -21,10 +21,20 @@ jobs:
       - run: npm run build
       - name: Package
         run: npm run package
-      - name: Publish to Open VSX
-        run: npx ovsx publish *.vsix --pat ${{ secrets.OVSX_PAT }}
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: "*.vsix"
           generate_release_notes: true
+          body: |
+            ## Install
+
+            ```sh
+            code --install-extension revu-vscode-${{ github.ref_name }}.vsix
+            ```
+
+            Or download the `.vsix` above and drag it into VS Code Extensions panel.
+
+            ---
+
+            **Marketplace:** upload the `.vsix` manually at https://marketplace.visualstudio.com/manage/publishers/kud
