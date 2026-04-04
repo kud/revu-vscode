@@ -1,0 +1,59 @@
+{
+  "name": "revu-vscode",
+  "displayName": "revu",
+  "description": "Annotate code, export reviews to AI",
+  "version": "0.1.0",
+  "publisher": "kud",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kud/revu-vscode"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "icon": "assets/revu-logo.png",
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "revu.addComment",
+        "title": "Add Comment",
+        "category": "revu"
+      },
+      {
+        "command": "revu.exportReview",
+        "title": "Export Review",
+        "category": "revu"
+      },
+      {
+        "command": "revu.clearComments",
+        "title": "Clear All Comments",
+        "category": "revu"
+      }
+    ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "revu.addComment",
+          "group": "revu"
+        }
+      ]
+    }
+  },
+  "scripts": {
+    "build": "bun build src/extension.ts --outfile dist/extension.js --target node --format cjs --external vscode",
+    "watch": "bun run build --watch",
+    "typecheck": "tsc --noEmit",
+    "package": "bunx @vscode/vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/node": "^22",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5"
+  }
+}
