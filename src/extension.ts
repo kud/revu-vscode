@@ -95,25 +95,19 @@ const createNote = (reply: vscode.CommentReply) => {
   refresh()
 }
 
-const askPrompt = async (): Promise<string | undefined> => {
-  return vscode.window.showInputBox({
-    prompt: "What should the AI do with this review?",
-    placeHolder: "e.g. Fix these issues, explain your choices…",
-    value: "Please review and fix the following annotations:",
-  })
-}
+const buildPayload = () => `\
+The following is a code review with inline annotations. \
+Each annotation is attached to a specific file and line number and describes an issue, a question, or an improvement to make. \
+Please read every annotation carefully and implement all the requested changes in the code.
 
-const buildPayload = (prompt: string) =>
-  `${prompt}\n\n${renderMarkdown(threads)}`
+${renderMarkdown(threads)}`
 
 const copyToClipboard = async () => {
   if (threads.length === 0) {
     vscode.window.showInformationMessage("revu: no annotations to copy.")
     return
   }
-  const prompt = await askPrompt()
-  if (prompt === undefined) return
-  await vscode.env.clipboard.writeText(buildPayload(prompt))
+  await vscode.env.clipboard.writeText(buildPayload())
   vscode.window.showInformationMessage("revu: review copied to clipboard.")
 }
 
@@ -141,10 +135,7 @@ const exportReview = async () => {
 
   if (!choice) return
 
-  const prompt = await askPrompt()
-  if (prompt === undefined) return
-
-  const payload = buildPayload(prompt)
+  const payload = buildPayload()
 
   if (choice.id === "claude") {
     await vscode.commands.executeCommand("claude-vscode.sidebar.open")
