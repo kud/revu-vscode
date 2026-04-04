@@ -60,13 +60,11 @@
       "editor/title": [
         {
           "command": "revu.addComment",
-          "group": "navigation",
-          "when": "editorFocus"
+          "group": "navigation"
         },
         {
           "command": "revu.exportReview",
-          "group": "navigation",
-          "when": "editorFocus"
+          "group": "navigation"
         }
       ],
       "editor/context": [
