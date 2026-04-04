@@ -14,13 +14,13 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
       - run: npm ci
       - run: npm run typecheck
       - run: npm run build
       - name: Package
-        run: npm run package
+        run: mkdir -p build && npm run package
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
