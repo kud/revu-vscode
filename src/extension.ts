@@ -23,9 +23,18 @@ const AI_EXTENSIONS = [
 
 const isInstalled = (id: string) => !!vscode.extensions.getExtension(id)
 
+type ViewMode = "flat" | "grouped" | "tree"
+const VIEW_MODES: ViewMode[] = ["flat", "grouped", "tree"]
+const VIEW_MODE_ICONS: Record<ViewMode, string> = {
+  flat: "$(list-unordered)",
+  grouped: "$(list-tree)",
+  tree: "$(type-hierarchy)",
+}
+
 let controller: vscode.CommentController
 let statusBar: vscode.StatusBarItem
 let notesProvider: RevuNotesProvider
+let viewMode: ViewMode = "grouped"
 const threads: vscode.CommentThread[] = []
 
 export const activate = (context: vscode.ExtensionContext) => {
@@ -57,6 +66,7 @@ export const activate = (context: vscode.ExtensionContext) => {
     vscode.commands.registerCommand("revu.exportReview", exportReview),
     vscode.commands.registerCommand("revu.clearComments", clearComments),
     vscode.commands.registerCommand("revu.goToNote", goToNote),
+    vscode.commands.registerCommand("revu.cycleView", cycleView),
   )
 
   refresh()
@@ -182,6 +192,13 @@ const goToNote = (item: NoteItem) => {
   })
 }
 
+const cycleView = () => {
+  const next =
+    VIEW_MODES[(VIEW_MODES.indexOf(viewMode) + 1) % VIEW_MODES.length]
+  viewMode = next
+  refresh()
+}
+
 const refresh = () => {
   notesProvider.refresh()
   updateStatusBar()
@@ -225,7 +242,9 @@ const renderMarkdown = (commentThreads: vscode.CommentThread[]): string => {
     .join("\n\n")
 }
 
-class RevuNotesProvider implements vscode.TreeDataProvider<NoteItem> {
+type TreeNode = NoteItem | GroupItem
+
+class RevuNotesProvider implements vscode.TreeDataProvider<TreeNode> {
   private _onDidChangeTreeData = new vscode.EventEmitter<void>()
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event
 
@@ -233,17 +252,82 @@ class RevuNotesProvider implements vscode.TreeDataProvider<NoteItem> {
     this._onDidChangeTreeData.fire()
   }
 
-  getTreeItem(element: NoteItem) {
+  getTreeItem(element: TreeNode) {
     return element
   }
 
-  getChildren(): NoteItem[] {
-    return threads.map((thread) => new NoteItem(thread))
+  getChildren(element?: TreeNode): TreeNode[] {
+    if (viewMode === "flat") {
+      if (element) return []
+      return threads.map((t) => new NoteItem(t, false))
+    }
+
+    if (viewMode === "grouped") {
+      if (element instanceof GroupItem) {
+        return element.threads.map((t) => new NoteItem(t, true))
+      }
+      return groupByFile(threads).map(
+        ([file, ts]) => new GroupItem(file, ts, false),
+      )
+    }
+
+    // tree mode — group by directory segments
+    if (element instanceof GroupItem && element.isDir) {
+      return element.threads.length
+        ? [new GroupItem(element.label as string, element.threads, false)]
+        : []
+    }
+    if (element instanceof GroupItem) {
+      return element.threads.map((t) => new NoteItem(t, true))
+    }
+    return buildDirTree(threads)
+  }
+}
+
+const groupByFile = (
+  ts: vscode.CommentThread[],
+): [string, vscode.CommentThread[]][] => {
+  const map = new Map<string, vscode.CommentThread[]>()
+  for (const t of ts) {
+    const file = vscode.workspace.asRelativePath(t.uri)
+    if (!map.has(file)) map.set(file, [])
+    map.get(file)!.push(t)
+  }
+  return Array.from(map.entries())
+}
+
+const buildDirTree = (ts: vscode.CommentThread[]): GroupItem[] => {
+  const dirMap = new Map<string, vscode.CommentThread[]>()
+  for (const t of ts) {
+    const file = vscode.workspace.asRelativePath(t.uri)
+    const dir = file.includes("/")
+      ? file.split("/").slice(0, -1).join("/")
+      : "."
+    if (!dirMap.has(dir)) dirMap.set(dir, [])
+    dirMap.get(dir)!.push(t)
+  }
+  return Array.from(dirMap.entries()).map(
+    ([dir, dts]) => new GroupItem(dir, dts, true),
+  )
+}
+
+class GroupItem extends vscode.TreeItem {
+  constructor(
+    label: string,
+    public readonly threads: vscode.CommentThread[],
+    public readonly isDir: boolean,
+  ) {
+    super(label, vscode.TreeItemCollapsibleState.Expanded)
+    this.iconPath = new vscode.ThemeIcon(isDir ? "folder" : "file")
+    this.description = `${threads.length} note${threads.length === 1 ? "" : "s"}`
   }
 }
 
 class NoteItem extends vscode.TreeItem {
-  constructor(public readonly thread: vscode.CommentThread) {
+  constructor(
+    public readonly thread: vscode.CommentThread,
+    fileInDescription: boolean,
+  ) {
     const file = vscode.workspace.asRelativePath(thread.uri)
     const line = (thread.range?.start.line ?? 0) + 1
     const firstComment = thread.comments[0]
@@ -254,8 +338,9 @@ class NoteItem extends vscode.TreeItem {
         ).slice(0, 60)
       : "…"
 
-    super(`${file}:${line}`, vscode.TreeItemCollapsibleState.None)
-    this.description = preview
+    const label = fileInDescription ? `line ${line}` : `${file}:${line}`
+    super(label, vscode.TreeItemCollapsibleState.None)
+    this.description = fileInDescription ? preview : `  ${preview}`
     this.tooltip = preview
     this.iconPath = new vscode.ThemeIcon("comment")
     this.command = {

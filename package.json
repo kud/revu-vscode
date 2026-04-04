@@ -49,6 +49,12 @@
         "title": "Clear All Comments",
         "category": "revu",
         "icon": "$(trash)"
+      },
+      {
+        "command": "revu.cycleView",
+        "title": "Cycle View Mode",
+        "category": "revu",
+        "icon": "$(list-tree)"
       }
     ],
     "viewsContainers": {
@@ -96,6 +102,11 @@
         },
         {
           "command": "revu.exportReview",
+          "group": "navigation",
+          "when": "view == revu.notes"
+        },
+        {
+          "command": "revu.cycleView",
           "group": "navigation",
           "when": "view == revu.notes"
         },
