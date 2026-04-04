@@ -17,6 +17,10 @@ description = "Build, package, and install the extension in VSCode"
 run = "npm run typecheck"
 description = "Type-check without emitting"
 
+[tasks.publish]
+run = "open https://marketplace.visualstudio.com/manage/publishers/kud"
+description = "Open the VS Code Marketplace publisher page to upload the .vsix"
+
 [tasks.release]
 run = """
 #!/usr/bin/env zsh
