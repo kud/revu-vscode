@@ -22,7 +22,7 @@
     "commands": [
       {
         "command": "revu.addComment",
-        "title": "Add Comment",
+        "title": "Add Annotation",
         "category": "revu",
         "icon": "$(comment-add)"
       },
@@ -67,20 +67,29 @@
         {
           "command": "revu.addComment",
           "group": "navigation"
-        },
-        {
-          "command": "revu.copyToClipboard",
-          "group": "navigation"
-        },
-        {
-          "command": "revu.exportReview",
-          "group": "navigation"
         }
       ],
       "editor/context": [
         {
           "command": "revu.addComment",
           "group": "revu"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "revu.copyToClipboard",
+          "group": "navigation",
+          "when": "view == revu.notes"
+        },
+        {
+          "command": "revu.exportReview",
+          "group": "navigation",
+          "when": "view == revu.notes"
+        },
+        {
+          "command": "revu.clearComments",
+          "group": "navigation",
+          "when": "view == revu.notes"
         }
       ]
     }
