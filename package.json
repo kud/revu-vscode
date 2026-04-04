@@ -137,10 +137,10 @@
     "install-ext": "npm run build && npm run package && code --install-extension revu-vscode-*.vsix"
   },
   "devDependencies": {
-    "@types/node": "^22",
-    "@types/vscode": "^1.90.0",
+    "@types/node": "^25",
+    "@types/vscode": "^1.110.0",
     "@vscode/vsce": "3.7.1",
-    "esbuild": "^0.25",
-    "typescript": "^5"
+    "esbuild": "^0.28",
+    "typescript": "^6"
   }
 }
