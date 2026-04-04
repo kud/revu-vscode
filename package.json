@@ -27,6 +27,12 @@
         "icon": "$(comment-add)"
       },
       {
+        "command": "revu.copyToClipboard",
+        "title": "Copy to Clipboard",
+        "category": "revu",
+        "icon": "$(clippy)"
+      },
+      {
         "command": "revu.exportReview",
         "title": "Export Review",
         "category": "revu",
@@ -60,6 +66,10 @@
       "editor/title": [
         {
           "command": "revu.addComment",
+          "group": "navigation"
+        },
+        {
+          "command": "revu.copyToClipboard",
           "group": "navigation"
         },
         {

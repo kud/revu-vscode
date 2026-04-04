@@ -32,6 +32,7 @@ export const activate = (context: vscode.ExtensionContext) => {
     statusBar,
     vscode.window.registerTreeDataProvider("revu.notes", notesProvider),
     vscode.commands.registerCommand("revu.addComment", addComment),
+    vscode.commands.registerCommand("revu.copyToClipboard", copyToClipboard),
     vscode.commands.registerCommand("revu.exportReview", exportReview),
     vscode.commands.registerCommand("revu.clearComments", clearComments),
     vscode.commands.registerCommand("revu.goToNote", goToNote),
@@ -63,6 +64,15 @@ const addComment = () => {
   vscode.commands.executeCommand("workbench.action.addComment")
 }
 
+const copyToClipboard = async () => {
+  if (threads.length === 0) {
+    vscode.window.showInformationMessage("revu: no comments to copy.")
+    return
+  }
+  await vscode.env.clipboard.writeText(renderMarkdown(threads))
+  vscode.window.showInformationMessage("revu: review copied to clipboard.")
+}
+
 const exportReview = async () => {
   if (threads.length === 0) {
     vscode.window.showInformationMessage("revu: no comments to export.")
@@ -73,23 +83,41 @@ const exportReview = async () => {
 
   const choice = await vscode.window.showQuickPick(
     [
-      { label: "$(clippy) Copy to clipboard", id: "clipboard" },
+      { label: "$(anthropic) Send to Claude Code", id: "claude" },
       { label: "$(comment-discussion) Send to Copilot Chat", id: "copilot" },
-      { label: "$(file) Save as .revu-review.md", id: "file" },
+      { label: "$(globe) Send to ChatGPT", id: "chatgpt" },
+      { label: "$(terminal) Send to opencode", id: "opencode" },
+      { label: "$(clippy) Copy to clipboard", id: "clipboard" },
+      { label: "$(file) Export as Markdown", id: "file" },
     ],
-    { title: "Export review as…" },
+    { title: "Send review to…" },
   )
 
   if (!choice) return
 
-  if (choice.id === "clipboard") {
-    await vscode.env.clipboard.writeText(markdown)
-    vscode.window.showInformationMessage("revu: review copied to clipboard.")
+  if (choice.id === "claude") {
+    await vscode.commands.executeCommand("claude-vscode.sidebar.open")
+    await vscode.commands.executeCommand(
+      "claude-vscode.insertAtMention",
+      markdown,
+    )
   } else if (choice.id === "copilot") {
-    await vscode.env.clipboard.writeText(markdown)
     vscode.commands.executeCommand("workbench.action.chat.open", {
       query: markdown,
     })
+  } else if (choice.id === "chatgpt") {
+    await vscode.env.clipboard.writeText(markdown)
+    vscode.env.openExternal(vscode.Uri.parse("https://chat.openai.com"))
+    vscode.window.showInformationMessage(
+      "revu: review copied — paste it in ChatGPT.",
+    )
+  } else if (choice.id === "opencode") {
+    const terminal = vscode.window.createTerminal("revu → opencode")
+    terminal.show()
+    terminal.sendText(`opencode << 'REVU'\n${markdown}\nREVU`)
+  } else if (choice.id === "clipboard") {
+    await vscode.env.clipboard.writeText(markdown)
+    vscode.window.showInformationMessage("revu: review copied to clipboard.")
   } else if (choice.id === "file") {
     const folders = vscode.workspace.workspaceFolders
     if (!folders) return
