@@ -20,8 +20,8 @@ const AI_EXTENSIONS = [
   },
 ]
 
-type ViewMode = "flat" | "grouped" | "tree"
-const VIEW_MODES: ViewMode[] = ["flat", "grouped", "tree"]
+type ViewMode = "flat" | "grouped"
+const VIEW_MODES: ViewMode[] = ["flat", "grouped"]
 
 let controller: vscode.CommentController
 let statusBar: vscode.StatusBarItem
@@ -30,7 +30,7 @@ let viewMode: ViewMode = "grouped"
 let extensionUri: vscode.Uri
 const threads: vscode.CommentThread[] = []
 
-export const activate = (context: vscode.ExtensionContext) => {
+export const activate = async (context: vscode.ExtensionContext) => {
   extensionUri = context.extensionUri
   controller = vscode.comments.createCommentController(
     CONTROLLER_ID,
@@ -63,55 +63,96 @@ export const activate = (context: vscode.ExtensionContext) => {
     vscode.commands.registerCommand("revu.cycleView", cycleView),
   )
 
+  await loadFromDisk()
   refresh()
 }
 
+const storeUri = (): vscode.Uri | undefined => {
+  const folders = vscode.workspace.workspaceFolders
+  return folders ? vscode.Uri.joinPath(folders[0].uri, ".revu.json") : undefined
+}
+
+type StoredNote = {
+  file: string
+  startLine: number
+  endLine: number
+  body: string
+}
+
+const saveToDisk = async () => {
+  const uri = storeUri()
+  if (!uri) return
+  const data: StoredNote[] = threads.flatMap((t) =>
+    t.comments.map((c) => ({
+      file: vscode.workspace.asRelativePath(t.uri),
+      startLine: t.range?.start.line ?? 0,
+      endLine: t.range?.end.line ?? 0,
+      body: c.body instanceof vscode.MarkdownString ? c.body.value : c.body,
+    })),
+  )
+  await vscode.workspace.fs.writeFile(
+    uri,
+    Buffer.from(JSON.stringify(data, null, 2)),
+  )
+}
+
+const loadFromDisk = async () => {
+  const folders = vscode.workspace.workspaceFolders
+  if (!folders) return
+  const files = (
+    await vscode.workspace.findFiles("{.revu*,revu*}.json", null, 20)
+  ).filter((f) => !vscode.workspace.asRelativePath(f).includes("/"))
+  for (const fileUri of files) {
+    try {
+      const raw = await vscode.workspace.fs.readFile(fileUri)
+      const data: StoredNote[] = JSON.parse(raw.toString())
+      for (const note of data) {
+        const uri = vscode.Uri.joinPath(folders[0].uri, note.file)
+        const thread = controller.createCommentThread(
+          uri,
+          new vscode.Range(note.startLine, 0, note.endLine, 0),
+          [
+            {
+              body: new vscode.MarkdownString(note.body),
+              mode: vscode.CommentMode.Preview,
+              author: makeAuthor(),
+            },
+          ],
+        )
+        thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
+        thread.canReply = false
+        trackThread(thread)
+      }
+    } catch {
+      // skip unreadable or incompatible files
+    }
+  }
+}
+
 const makeAuthor = (): vscode.CommentAuthorInformation => ({
-  name: "{revu}",
+  name: "",
   iconPath: vscode.Uri.joinPath(extensionUri, "assets", "revu-logo.png"),
 })
 
 const trackThread = (thread: vscode.CommentThread) => {
+  threads.forEach(
+    (t) =>
+      (t.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed),
+  )
   const original = thread.dispose.bind(thread)
   thread.dispose = () => {
     threads.splice(threads.indexOf(thread), 1)
     original()
+    saveToDisk()
     refresh()
   }
   threads.push(thread)
+  saveToDisk()
   refresh()
 }
 
 const addComment = async () => {
-  const editor = vscode.window.activeTextEditor
-  if (!editor) return
-
-  const { start, end } = editor.selection
-  const lineInfo =
-    start.line === end.line
-      ? `line ${start.line + 1}`
-      : `lines ${start.line + 1}–${end.line + 1}`
-
-  const body = await vscode.window.showInputBox({
-    prompt: `Annotation for ${lineInfo}`,
-    placeHolder: "Your annotation…",
-  })
-  if (!body) return
-
-  const thread = controller.createCommentThread(
-    editor.document.uri,
-    new vscode.Range(start.line, 0, end.line, 0),
-    [
-      {
-        body: new vscode.MarkdownString(body),
-        mode: vscode.CommentMode.Preview,
-        author: makeAuthor(),
-      },
-    ],
-  )
-  thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
-  thread.canReply = false
-  trackThread(thread)
+  await vscode.commands.executeCommand("workbench.action.addComment")
 }
 
 const createNote = (reply: vscode.CommentReply) => {
@@ -210,12 +251,19 @@ const exportReview = async () => {
   }
 }
 
-const clearComments = () => {
+const clearComments = async () => {
+  const confirmed = await vscode.window.showWarningMessage(
+    "Clear all annotations? This cannot be undone.",
+    { modal: true },
+    "Clear all",
+  )
+  if (confirmed !== "Clear all") return
   ;[...threads].forEach((t) => t.dispose())
   vscode.window.showInformationMessage("revu: all annotations cleared.")
 }
 
 const goToNote = (item: NoteItem) => {
+  item.thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded
   vscode.window.showTextDocument(item.thread.uri, {
     selection: item.thread.range,
   })
@@ -275,21 +323,6 @@ const groupByFile = (
   return Array.from(map.entries())
 }
 
-const buildDirTree = (ts: vscode.CommentThread[]): GroupItem[] => {
-  const dirMap = new Map<string, vscode.CommentThread[]>()
-  for (const t of ts) {
-    const file = vscode.workspace.asRelativePath(t.uri)
-    const dir = file.includes("/")
-      ? file.split("/").slice(0, -1).join("/")
-      : "."
-    if (!dirMap.has(dir)) dirMap.set(dir, [])
-    dirMap.get(dir)!.push(t)
-  }
-  return Array.from(dirMap.entries()).map(
-    ([dir, dts]) => new GroupItem(dir, dts, true),
-  )
-}
-
 type TreeNode = NoteItem | GroupItem
 
 class RevuNotesProvider implements vscode.TreeDataProvider<TreeNode> {
@@ -308,25 +341,9 @@ class RevuNotesProvider implements vscode.TreeDataProvider<TreeNode> {
     if (viewMode === "flat") {
       return element ? [] : threads.map((t) => new NoteItem(t, false))
     }
-
-    if (viewMode === "grouped") {
-      if (element instanceof GroupItem)
-        return element.threads.map((t) => new NoteItem(t, true))
-      return groupByFile(threads).map(
-        ([file, ts]) => new GroupItem(file, ts, false),
-      )
-    }
-
-    // tree: dir nodes at root, file groups inside dirs
-    if (!element) return buildDirTree(threads)
-    if (element instanceof GroupItem && element.isDir) {
-      return groupByFile(element.threads).map(
-        ([file, ts]) => new GroupItem(file.split("/").pop()!, ts, false),
-      )
-    }
     if (element instanceof GroupItem)
       return element.threads.map((t) => new NoteItem(t, true))
-    return []
+    return groupByFile(threads).map(([file, ts]) => new GroupItem(file, ts))
   }
 }
 
@@ -334,10 +351,9 @@ class GroupItem extends vscode.TreeItem {
   constructor(
     label: string,
     public readonly threads: vscode.CommentThread[],
-    public readonly isDir: boolean,
   ) {
     super(label, vscode.TreeItemCollapsibleState.Expanded)
-    this.iconPath = new vscode.ThemeIcon(isDir ? "folder" : "file")
+    this.iconPath = new vscode.ThemeIcon("file")
     this.description = `${threads.length} note${threads.length === 1 ? "" : "s"}`
   }
 }

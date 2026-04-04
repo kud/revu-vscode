@@ -46,7 +46,7 @@
       },
       {
         "command": "revu.clearComments",
-        "title": "Clear All Comments",
+        "title": "Clear all annotations",
         "category": "revu",
         "icon": "$(trash)"
       },
@@ -96,23 +96,23 @@
       ],
       "view/title": [
         {
+          "command": "revu.cycleView",
+          "group": "navigation@1",
+          "when": "view == revu.notes"
+        },
+        {
           "command": "revu.copyToClipboard",
-          "group": "navigation",
+          "group": "navigation@2",
           "when": "view == revu.notes"
         },
         {
           "command": "revu.exportReview",
-          "group": "navigation",
-          "when": "view == revu.notes"
-        },
-        {
-          "command": "revu.cycleView",
-          "group": "navigation",
+          "group": "navigation@3",
           "when": "view == revu.notes"
         },
         {
           "command": "revu.clearComments",
-          "group": "navigation",
+          "group": "navigation@4",
           "when": "view == revu.notes"
         }
       ]
