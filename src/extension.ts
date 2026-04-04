@@ -35,9 +35,11 @@ let controller: vscode.CommentController
 let statusBar: vscode.StatusBarItem
 let notesProvider: RevuNotesProvider
 let viewMode: ViewMode = "grouped"
+let extensionUri: vscode.Uri
 const threads: vscode.CommentThread[] = []
 
 export const activate = (context: vscode.ExtensionContext) => {
+  extensionUri = context.extensionUri
   controller = vscode.comments.createCommentController(
     CONTROLLER_ID,
     CONTROLLER_LABEL,
@@ -87,7 +89,10 @@ const createNote = (reply: vscode.CommentReply) => {
   const comment: vscode.Comment = {
     body: new vscode.MarkdownString(reply.text),
     mode: vscode.CommentMode.Preview,
-    author: { name: "{revu}" },
+    author: {
+      name: "{revu}",
+      iconPath: vscode.Uri.joinPath(extensionUri, "assets", "revu-logo.png"),
+    },
   }
   reply.thread.comments = [comment]
   reply.thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
