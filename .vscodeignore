@@ -1,6 +1,7 @@
 src/
 CLAUDE.md
 .github/
+build/
 node_modules/
 .vscode/
 .gitignore

@@ -9,6 +9,7 @@
     "type": "git",
     "url": "https://github.com/kud/revu-vscode"
   },
+  "homepage": "https://marketplace.visualstudio.com/items?itemName=kud.revu-vscode",
   "engines": {
     "vscode": "^1.110.0"
   },
@@ -133,8 +134,8 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
-    "package": "vsce package --no-dependencies",
-    "install-ext": "npm run build && npm run package && code --install-extension revu-vscode-*.vsix"
+    "package": "vsce package --no-dependencies --out build/",
+    "install-ext": "npm run build && npm run package && code --install-extension build/revu-vscode-*.vsix"
   },
   "devDependencies": {
     "@types/node": "^25",
