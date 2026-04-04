@@ -41,14 +41,27 @@ export const activate = (context: vscode.ExtensionContext) => {
   refresh()
 }
 
-const addComment = () => {
+const addComment = async () => {
   const editor = vscode.window.activeTextEditor
   if (!editor) return
 
   const line = editor.selection.active.line
+  const body = await vscode.window.showInputBox({
+    prompt: `Annotation for line ${line + 1}`,
+    placeHolder: "Your annotation…",
+  })
+  if (!body) return
+
   const range = new vscode.Range(line, 0, line, 0)
-  const thread = controller.createCommentThread(editor.document.uri, range, [])
-  thread.collapsibleState = vscode.CommentThreadCollapsibleState.Expanded
+  const comment: vscode.Comment = {
+    body: new vscode.MarkdownString(body),
+    mode: vscode.CommentMode.Preview,
+    author: { name: "revu" },
+  }
+  const thread = controller.createCommentThread(editor.document.uri, range, [
+    comment,
+  ])
+  thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
   thread.canReply = false
 
   const originalDispose = thread.dispose.bind(thread)
@@ -60,8 +73,6 @@ const addComment = () => {
 
   threads.push(thread)
   refresh()
-
-  vscode.commands.executeCommand("workbench.action.addComment")
 }
 
 const copyToClipboard = async () => {
