@@ -81,11 +81,13 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
-    "package": "npx @vscode/vsce package --no-dependencies"
+    "package": "vsce package --no-dependencies",
+    "install-ext": "npm run build && npm run package && code --install-extension revu-vscode-*.vsix"
   },
   "devDependencies": {
     "@types/node": "^22",
     "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "3.7.1",
     "esbuild": "^0.25",
     "typescript": "^5"
   }

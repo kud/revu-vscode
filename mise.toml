@@ -1,0 +1,18 @@
+[tools]
+node = "latest"
+
+[tasks.dev]
+run = "npm run watch"
+description = "Watch and rebuild on changes"
+
+[tasks.build]
+run = "npm run build"
+description = "Build the extension"
+
+[tasks.install]
+run = "npm run install-ext"
+description = "Build, package, and install the extension in VSCode"
+
+[tasks.typecheck]
+run = "npm run typecheck"
+description = "Type-check without emitting"
