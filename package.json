@@ -29,7 +29,7 @@
       },
       {
         "command": "revu.createNote",
-        "title": "Start Discussion",
+        "title": "Add Annotation",
         "category": "revu",
         "enablement": "!commentIsEmpty"
       },
@@ -41,9 +41,9 @@
       },
       {
         "command": "revu.exportReview",
-        "title": "Export Review",
+        "title": "Send to Copilot",
         "category": "revu",
-        "icon": "$(export)"
+        "icon": "$(comment-discussion)"
       },
       {
         "command": "revu.exportMarkdown",
@@ -53,7 +53,7 @@
       },
       {
         "command": "revu.clearComments",
-        "title": "Clear all annotations",
+        "title": "Clear All Annotations",
         "category": "revu",
         "icon": "$(trash)"
       },
@@ -71,12 +71,12 @@
       },
       {
         "command": "revu.saveAnnotation",
-        "title": "Save",
+        "title": "Save Annotation",
         "category": "revu"
       },
       {
         "command": "revu.cancelAnnotation",
-        "title": "Cancel",
+        "title": "Cancel Edit",
         "category": "revu"
       }
     ],
@@ -183,8 +183,9 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "watch": "npm run build -- --watch",
     "typecheck": "tsc --noEmit",
+    "clean": "rm -f build/*.vsix",
     "package": "vsce package --no-dependencies --out build/",
-    "install-ext": "npm run build && npm run package && code --install-extension build/revu-vscode-*.vsix"
+    "install-ext": "npm run build && npm run clean && npm run package && code --install-extension build/revu-vscode-*.vsix --force"
   },
   "devDependencies": {
     "@types/node": "^25",

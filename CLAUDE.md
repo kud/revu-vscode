@@ -3,14 +3,19 @@
 ## Build & Install
 
 ```sh
-npm run build          # esbuild → dist/extension.js
+npm run build          # esbuild → dist/extension.js; Hello!
 npm run typecheck      # tsc --noEmit
-npm run install-ext    # build + package + code --install-extension
+npm run install-ext    # build + package + code --install-extension; Hello
+# hello hahaha
 ```
+
+Hello
 
 Always verify the compiled output after editing: grep `dist/extension.js` for the key change before committing.
 
 ## Architecture
+
+Hahaha
 
 - **Runtime**: VSCode extension host — Node.js, not Bun. Use npm, not bun.
 - **Bundler**: esbuild, CJS output (`--format=cjs`), `vscode` is external.
@@ -26,10 +31,14 @@ Shared with `revu-cli`. Both tools read and write the same file at workspace roo
   "prompt": "Code review — inline annotations per file and line...",
   "comments": [
     {
+      "note": "hahaha",
       "file": "src/foo.ts",
       "startLine": 5,
       "endLine": 5,
       "text": "Use verifyPassword here — it's timing-safe."
+    },
+    {
+      "text": "cdsfmsdofm!"
     }
   ]
 }

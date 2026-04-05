@@ -2,24 +2,6 @@ import * as vscode from "vscode"
 
 const CONTROLLER_ID = "revu"
 
-const AI_EXTENSIONS = [
-  {
-    id: "anthropic.claude-code",
-    label: "$(anthropic) Send to Claude Code",
-    action: "claude",
-  },
-  {
-    id: "GitHub.copilot-chat",
-    label: "$(comment-discussion) Send to Copilot Chat",
-    action: "copilot",
-  },
-  {
-    id: "Continue.continue",
-    label: "$(hubot) Send to Continue",
-    action: "continue",
-  },
-]
-
 type ViewMode = "flat" | "grouped"
 const VIEW_MODES: ViewMode[] = ["flat", "grouped"]
 
@@ -142,7 +124,7 @@ const loadFromDisk = async () => {
 }
 
 const makeAuthor = (): vscode.CommentAuthorInformation => ({
-  name: "revu · Annotation",
+  name: "Annotation",
   iconPath: vscode.Uri.joinPath(extensionUri, "assets", "revu-logo.png"),
 })
 
@@ -187,6 +169,11 @@ class RevuComment implements vscode.Comment {
 }
 
 const trackThread = (thread: vscode.CommentThread) => {
+  const filename = thread.uri.path.split("/").pop() ?? ""
+  const start = (thread.range?.start.line ?? 0) + 1
+  const end = (thread.range?.end.line ?? 0) + 1
+  const lines = start === end ? `line ${start}` : `lines ${start}–${end}`
+  thread.label = `revu · ${filename} · ${lines}`
   threads.forEach(
     (t) =>
       (t.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed),
@@ -242,19 +229,8 @@ const exportMarkdown = async () => {
   }
   const folders = vscode.workspace.workspaceFolders
   if (!folders) return
-
-  const prompt = await vscode.window.showInputBox({
-    prompt: "What should the AI do with these annotations?",
-    placeHolder: "e.g. Please fix all the issues listed below…",
-    value: savedPrompt,
-  })
-  if (prompt === undefined) return
-
-  savedPrompt = prompt || DEFAULT_PROMPT
-  saveToDisk()
-  const payload = `${savedPrompt}\n\n${renderMarkdown(threads)}`
   const uri = vscode.Uri.joinPath(folders[0].uri, "revu-review.md")
-  await vscode.workspace.fs.writeFile(uri, Buffer.from(payload))
+  await vscode.workspace.fs.writeFile(uri, Buffer.from(buildPayload()))
   vscode.window.showTextDocument(uri)
 }
 
@@ -263,67 +239,9 @@ const exportReview = async () => {
     vscode.window.showInformationMessage("revu: no annotations to export.")
     return
   }
-
-  const aiOptions = AI_EXTENSIONS.filter(
-    (e) => !!vscode.extensions.getExtension(e.id),
-  ).map((e) => ({ label: e.label, id: e.action }))
-
-  const choice = await vscode.window.showQuickPick(
-    [
-      ...aiOptions,
-      { label: "$(globe) Send to ChatGPT", id: "chatgpt" },
-      { label: "$(terminal) Send to opencode", id: "opencode" },
-      { label: "$(clippy) Copy to clipboard", id: "clipboard" },
-      { label: "$(file) Export as Markdown", id: "file" },
-    ],
-    { title: "Send review to…" },
-  )
-  if (!choice) return
-
-  const payload = buildPayload()
-
-  switch (choice.id) {
-    case "claude":
-      await vscode.commands.executeCommand("claude-vscode.sidebar.open")
-      await vscode.commands.executeCommand(
-        "claude-vscode.insertAtMention",
-        payload,
-      )
-      break
-    case "copilot":
-      vscode.commands.executeCommand("workbench.action.chat.open", {
-        query: payload,
-      })
-      break
-    case "continue":
-      vscode.commands.executeCommand("continue.sendMainUserMessage", payload)
-      break
-    case "chatgpt":
-      await vscode.env.clipboard.writeText(payload)
-      vscode.env.openExternal(vscode.Uri.parse("https://chat.openai.com"))
-      vscode.window.showInformationMessage(
-        "revu: review copied — paste it in ChatGPT.",
-      )
-      break
-    case "opencode": {
-      const terminal = vscode.window.createTerminal("revu → opencode")
-      terminal.show()
-      terminal.sendText(`opencode << 'REVU'\n${payload}\nREVU`)
-      break
-    }
-    case "clipboard":
-      await vscode.env.clipboard.writeText(payload)
-      vscode.window.showInformationMessage("revu: review copied to clipboard.")
-      break
-    case "file": {
-      const folders = vscode.workspace.workspaceFolders
-      if (!folders) return
-      const uri = vscode.Uri.joinPath(folders[0].uri, "revu-review.md")
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(payload))
-      vscode.window.showTextDocument(uri)
-      break
-    }
-  }
+  vscode.commands.executeCommand("workbench.action.chat.open", {
+    query: buildPayload(),
+  })
 }
 
 const clearComments = async () => {
@@ -356,8 +274,8 @@ const refresh = () => {
     statusBar.hide()
     return
   }
-  statusBar.text = `$(comment) ${count} revu note${count === 1 ? "" : "s"}`
-  statusBar.tooltip = "revu: click to export review"
+  statusBar.text = `$(comment-discussion) ${count} revu note${count === 1 ? "" : "s"}`
+  statusBar.tooltip = "revu: click to send to Copilot"
   statusBar.show()
 }
 
@@ -413,11 +331,15 @@ class RevuNotesProvider implements vscode.TreeDataProvider<TreeNode> {
   }
 
   getChildren(element?: TreeNode): TreeNode[] {
+    const byLine = (a: vscode.CommentThread, b: vscode.CommentThread) =>
+      (a.range?.start.line ?? 0) - (b.range?.start.line ?? 0)
     if (viewMode === "flat") {
-      return element ? [] : threads.map((t) => new NoteItem(t, false))
+      return element
+        ? []
+        : [...threads].sort(byLine).map((t) => new NoteItem(t, false))
     }
     if (element instanceof GroupItem)
-      return element.threads.map((t) => new NoteItem(t, true))
+      return [...element.threads].sort(byLine).map((t) => new NoteItem(t, true))
     return groupByFile(threads).map(([file, ts]) => new GroupItem(file, ts))
   }
 }
@@ -439,7 +361,9 @@ class NoteItem extends vscode.TreeItem {
     fileInDescription: boolean,
   ) {
     const file = vscode.workspace.asRelativePath(thread.uri)
-    const line = (thread.range?.start.line ?? 0) + 1
+    const start = (thread.range?.start.line ?? 0) + 1
+    const end = (thread.range?.end.line ?? 0) + 1
+    const lines = start === end ? `line ${start}` : `lines ${start}–${end}`
     const firstComment = thread.comments[0]
     const preview = firstComment
       ? (firstComment.body instanceof vscode.MarkdownString
@@ -449,7 +373,7 @@ class NoteItem extends vscode.TreeItem {
       : "…"
 
     super(
-      fileInDescription ? `line ${line}` : `${file}:${line}`,
+      fileInDescription ? lines : `${file}:${start}`,
       vscode.TreeItemCollapsibleState.None,
     )
     this.description = preview
