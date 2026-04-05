@@ -62,6 +62,9 @@ export const activate = async (context: vscode.ExtensionContext) => {
     vscode.commands.registerCommand("revu.clearComments", clearComments),
     vscode.commands.registerCommand("revu.goToNote", goToNote),
     vscode.commands.registerCommand("revu.cycleView", cycleView),
+    vscode.commands.registerCommand("revu.editAnnotation", editAnnotation),
+    vscode.commands.registerCommand("revu.saveAnnotation", saveAnnotation),
+    vscode.commands.registerCommand("revu.cancelAnnotation", cancelAnnotation),
   )
 
   await loadFromDisk()
@@ -126,14 +129,9 @@ const loadFromDisk = async () => {
       const thread = controller.createCommentThread(
         fileUri,
         new vscode.Range(note.startLine, 0, note.endLine, 0),
-        [
-          {
-            body: new vscode.MarkdownString(note.text),
-            mode: vscode.CommentMode.Preview,
-            author: makeAuthor(),
-          },
-        ],
+        [],
       )
+      thread.comments = [new RevuComment(note.text, thread)]
       thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
       thread.canReply = false
       trackThread(thread)
@@ -147,6 +145,46 @@ const makeAuthor = (): vscode.CommentAuthorInformation => ({
   name: "revu · Annotation",
   iconPath: vscode.Uri.joinPath(extensionUri, "assets", "revu-logo.png"),
 })
+
+class RevuComment implements vscode.Comment {
+  body: string | vscode.MarkdownString
+  mode = vscode.CommentMode.Preview
+  author: vscode.CommentAuthorInformation
+  contextValue = "revuAnnotation"
+  private savedBody: string | vscode.MarkdownString
+
+  constructor(
+    text: string,
+    public readonly thread: vscode.CommentThread,
+  ) {
+    this.body = new vscode.MarkdownString(text)
+    this.savedBody = this.body
+    this.author = makeAuthor()
+  }
+
+  startEdit() {
+    this.savedBody = this.body
+    this.mode = vscode.CommentMode.Editing
+    this.thread.comments = [...this.thread.comments]
+  }
+
+  saveEdit() {
+    const text =
+      this.body instanceof vscode.MarkdownString
+        ? this.body.value
+        : (this.body as string)
+    this.body = new vscode.MarkdownString(text)
+    this.savedBody = this.body
+    this.mode = vscode.CommentMode.Preview
+    this.thread.comments = [...this.thread.comments]
+  }
+
+  cancelEdit() {
+    this.body = this.savedBody
+    this.mode = vscode.CommentMode.Preview
+    this.thread.comments = [...this.thread.comments]
+  }
+}
 
 const trackThread = (thread: vscode.CommentThread) => {
   threads.forEach(
@@ -170,17 +208,21 @@ const addComment = async () => {
 }
 
 const createNote = (reply: vscode.CommentReply) => {
-  reply.thread.comments = [
-    {
-      body: new vscode.MarkdownString(reply.text),
-      mode: vscode.CommentMode.Preview,
-      author: makeAuthor(),
-    },
-  ]
+  const comment = new RevuComment(reply.text, reply.thread)
+  reply.thread.comments = [comment]
   reply.thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
   reply.thread.canReply = false
   trackThread(reply.thread)
 }
+
+const editAnnotation = (comment: RevuComment) => comment.startEdit()
+
+const saveAnnotation = (comment: RevuComment) => {
+  comment.saveEdit()
+  saveToDisk()
+}
+
+const cancelAnnotation = (comment: RevuComment) => comment.cancelEdit()
 
 const buildPayload = () => `${savedPrompt}\n\n${renderMarkdown(threads)}`
 
