@@ -8,6 +8,7 @@ const VIEW_MODES: ViewMode[] = ["flat", "grouped"]
 let controller: vscode.CommentController
 let statusBar: vscode.StatusBarItem
 let notesProvider: RevuNotesProvider
+let treeView: vscode.TreeView<TreeNode>
 let viewMode: ViewMode = "grouped"
 let extensionUri: vscode.Uri
 const threads: vscode.CommentThread[] = []
@@ -16,8 +17,12 @@ export const activate = async (context: vscode.ExtensionContext) => {
   extensionUri = context.extensionUri
   controller = vscode.comments.createCommentController(
     CONTROLLER_ID,
-    CONTROLLER_ID,
+    "revu · Add Annotation",
   )
+  controller.options = {
+    placeHolder:
+      "Type a revu annotation… (e.g. Ask AI to refactor, explain, or fix this)",
+  }
   controller.commentingRangeProvider = {
     provideCommentingRanges: (document) => [
       new vscode.Range(0, 0, document.lineCount - 1, 0),
@@ -31,11 +36,14 @@ export const activate = async (context: vscode.ExtensionContext) => {
   statusBar.command = "revu.exportReview"
 
   notesProvider = new RevuNotesProvider()
+  treeView = vscode.window.createTreeView("revu.notes", {
+    treeDataProvider: notesProvider,
+  })
 
   context.subscriptions.push(
     controller,
     statusBar,
-    vscode.window.registerTreeDataProvider("revu.notes", notesProvider),
+    treeView,
     vscode.commands.registerCommand("revu.addComment", addComment),
     vscode.commands.registerCommand("revu.createNote", createNote),
     vscode.commands.registerCommand("revu.copyToClipboard", copyToClipboard),
@@ -47,6 +55,8 @@ export const activate = async (context: vscode.ExtensionContext) => {
     vscode.commands.registerCommand("revu.editAnnotation", editAnnotation),
     vscode.commands.registerCommand("revu.saveAnnotation", saveAnnotation),
     vscode.commands.registerCommand("revu.cancelAnnotation", cancelAnnotation),
+    vscode.commands.registerCommand("revu.editPrompt", editPrompt),
+    vscode.commands.registerCommand("revu.deleteAnnotation", deleteAnnotation),
   )
 
   await loadFromDisk()
@@ -211,6 +221,23 @@ const saveAnnotation = (comment: RevuComment) => {
 
 const cancelAnnotation = (comment: RevuComment) => comment.cancelEdit()
 
+const deleteAnnotation = (arg: RevuComment | NoteItem) => {
+  const thread = arg instanceof NoteItem ? arg.thread : arg.thread
+  thread.dispose()
+}
+
+const editPrompt = async () => {
+  const result = await vscode.window.showInputBox({
+    prompt: "Edit the review prompt sent to AI",
+    value: savedPrompt,
+    placeHolder: DEFAULT_PROMPT,
+  })
+  if (result !== undefined) {
+    savedPrompt = result || DEFAULT_PROMPT
+    await saveToDisk()
+  }
+}
+
 const buildPayload = () => `${savedPrompt}\n\n${renderMarkdown(threads)}`
 
 const copyToClipboard = async () => {
@@ -231,7 +258,7 @@ const exportMarkdown = async () => {
   if (!folders) return
   const uri = vscode.Uri.joinPath(folders[0].uri, "revu-review.md")
   await vscode.workspace.fs.writeFile(uri, Buffer.from(buildPayload()))
-  vscode.window.showTextDocument(uri)
+  await vscode.commands.executeCommand("markdown.showPreview", uri)
 }
 
 const exportReview = async () => {
@@ -270,6 +297,13 @@ const cycleView = () => {
 const refresh = () => {
   notesProvider.refresh()
   const count = threads.length
+  treeView.badge =
+    count > 0
+      ? {
+          tooltip: `${count} annotation${count === 1 ? "" : "s"}`,
+          value: count,
+        }
+      : undefined
   if (count === 0) {
     statusBar.hide()
     return
@@ -280,26 +314,22 @@ const refresh = () => {
 }
 
 const renderMarkdown = (commentThreads: vscode.CommentThread[]): string => {
-  const byFile = new Map<string, { line: number; body: string }[]>()
-  for (const thread of commentThreads) {
-    const file = vscode.workspace.asRelativePath(thread.uri)
-    if (!byFile.has(file)) byFile.set(file, [])
-    for (const comment of thread.comments) {
-      const body =
-        comment.body instanceof vscode.MarkdownString
-          ? comment.body.value
-          : comment.body
-      byFile
-        .get(file)!
-        .push({ line: (thread.range?.start.line ?? 0) + 1, body })
-    }
-  }
-  return Array.from(byFile.entries())
-    .map(([file, comments]) => {
-      const lines = comments.map(
-        ({ line, body }) => `- **line ${line}** — ${body}`,
-      )
-      return `## ${file}\n\n${lines.join("\n")}`
+  const byLine = (a: vscode.CommentThread, b: vscode.CommentThread) =>
+    (a.range?.start.line ?? 0) - (b.range?.start.line ?? 0)
+  return groupByFile(commentThreads)
+    .map(([file, fileThreads]) => {
+      const items = [...fileThreads].sort(byLine).flatMap((thread) => {
+        const start = (thread.range?.start.line ?? 0) + 1
+        const end = (thread.range?.end.line ?? 0) + 1
+        const lineRef =
+          start === end ? `line ${start}` : `lines ${start}–${end}`
+        return thread.comments.map((c) => {
+          const body =
+            c.body instanceof vscode.MarkdownString ? c.body.value : c.body
+          return `- **${lineRef}** — ${body}`
+        })
+      })
+      return `## ${file}\n\n${items.join("\n")}`
     })
     .join("\n\n")
 }
@@ -365,11 +395,15 @@ class NoteItem extends vscode.TreeItem {
     const end = (thread.range?.end.line ?? 0) + 1
     const lines = start === end ? `line ${start}` : `lines ${start}–${end}`
     const firstComment = thread.comments[0]
-    const preview = firstComment
-      ? (firstComment.body instanceof vscode.MarkdownString
-          ? firstComment.body.value
-          : firstComment.body
-        ).slice(0, 60)
+    const rawPreview = firstComment
+      ? firstComment.body instanceof vscode.MarkdownString
+        ? firstComment.body.value
+        : (firstComment.body as string)
+      : ""
+    const preview = rawPreview
+      ? rawPreview.length > 60
+        ? rawPreview.slice(0, 60) + "…"
+        : rawPreview
       : "…"
 
     super(
@@ -379,6 +413,7 @@ class NoteItem extends vscode.TreeItem {
     this.description = preview
     this.tooltip = preview
     this.iconPath = new vscode.ThemeIcon("comment")
+    this.contextValue = "revuNote"
     this.command = {
       command: "revu.goToNote",
       title: "Go to note",
@@ -387,4 +422,4 @@ class NoteItem extends vscode.TreeItem {
   }
 }
 
-export const deactivate = () => {}
+export const deactivate = () => saveToDisk()

@@ -78,6 +78,18 @@
         "command": "revu.cancelAnnotation",
         "title": "Cancel Edit",
         "category": "revu"
+      },
+      {
+        "command": "revu.editPrompt",
+        "title": "Edit Review Prompt",
+        "category": "revu",
+        "icon": "$(edit)"
+      },
+      {
+        "command": "revu.deleteAnnotation",
+        "title": "Delete Annotation",
+        "category": "revu",
+        "icon": "$(trash)"
       }
     ],
     "keybindings": [
@@ -134,7 +146,12 @@
       "comments/comment/title": [
         {
           "command": "revu.editAnnotation",
-          "group": "inline",
+          "group": "inline@1",
+          "when": "commentController == revu && comment == revuAnnotation"
+        },
+        {
+          "command": "revu.deleteAnnotation",
+          "group": "inline@2",
           "when": "commentController == revu && comment == revuAnnotation"
         }
       ],
@@ -152,29 +169,41 @@
       ],
       "view/title": [
         {
-          "command": "revu.cycleView",
+          "command": "revu.editPrompt",
           "group": "navigation@1",
           "when": "view == revu.notes"
         },
         {
-          "command": "revu.copyToClipboard",
+          "command": "revu.cycleView",
           "group": "navigation@2",
           "when": "view == revu.notes"
         },
         {
-          "command": "revu.exportReview",
+          "command": "revu.copyToClipboard",
           "group": "navigation@3",
           "when": "view == revu.notes"
         },
         {
-          "command": "revu.exportMarkdown",
+          "command": "revu.exportReview",
           "group": "navigation@4",
           "when": "view == revu.notes"
         },
         {
-          "command": "revu.clearComments",
+          "command": "revu.exportMarkdown",
           "group": "navigation@5",
           "when": "view == revu.notes"
+        },
+        {
+          "command": "revu.clearComments",
+          "group": "navigation@6",
+          "when": "view == revu.notes"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "revu.deleteAnnotation",
+          "group": "inline",
+          "when": "view == revu.notes && viewItem == revuNote"
         }
       ]
     }
