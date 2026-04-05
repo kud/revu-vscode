@@ -9,8 +9,10 @@ let controller: vscode.CommentController
 let statusBar: vscode.StatusBarItem
 let notesProvider: RevuNotesProvider
 let treeView: vscode.TreeView<TreeNode>
+let reviewProvider: ReviewContentProvider
 let viewMode: ViewMode = "grouped"
 let extensionUri: vscode.Uri
+let pendingSelectionRange: vscode.Range | undefined
 const threads: vscode.CommentThread[] = []
 
 export const activate = async (context: vscode.ExtensionContext) => {
@@ -36,11 +38,16 @@ export const activate = async (context: vscode.ExtensionContext) => {
   statusBar.command = "revu.exportReview"
 
   notesProvider = new RevuNotesProvider()
+  reviewProvider = new ReviewContentProvider()
   treeView = vscode.window.createTreeView("revu.notes", {
     treeDataProvider: notesProvider,
   })
 
   context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(
+      "revu",
+      reviewProvider,
+    ),
     controller,
     statusBar,
     treeView,
@@ -182,7 +189,7 @@ const trackThread = (thread: vscode.CommentThread) => {
   const filename = thread.uri.path.split("/").pop() ?? ""
   const start = (thread.range?.start.line ?? 0) + 1
   const end = (thread.range?.end.line ?? 0) + 1
-  const lines = start === end ? `line ${start}` : `lines ${start}–${end}`
+  const lines = start === end ? `Ln ${start}` : `Ln ${start}–${end}`
   thread.label = `revu · ${filename} · ${lines}`
   threads.forEach(
     (t) =>
@@ -201,10 +208,19 @@ const trackThread = (thread: vscode.CommentThread) => {
 }
 
 const addComment = async () => {
+  const editor = vscode.window.activeTextEditor
+  if (editor && !editor.selection.isEmpty && !editor.selection.isSingleLine) {
+    const { start, end } = editor.selection
+    pendingSelectionRange = new vscode.Range(start.line, 0, end.line, 0)
+  }
   await vscode.commands.executeCommand("workbench.action.addComment")
 }
 
 const createNote = (reply: vscode.CommentReply) => {
+  if (pendingSelectionRange) {
+    reply.thread.range = pendingSelectionRange
+    pendingSelectionRange = undefined
+  }
   const comment = new RevuComment(reply.text, reply.thread)
   reply.thread.comments = [comment]
   reply.thread.collapsibleState = vscode.CommentThreadCollapsibleState.Collapsed
@@ -226,16 +242,47 @@ const deleteAnnotation = (arg: RevuComment | NoteItem) => {
   thread.dispose()
 }
 
+const CUSTOM_PROMPT_SENTINEL = "__custom__"
+
 const editPrompt = async () => {
-  const result = await vscode.window.showInputBox({
-    prompt: "Edit the review prompt sent to AI",
-    value: savedPrompt,
-    placeHolder: DEFAULT_PROMPT,
-  })
-  if (result !== undefined) {
-    savedPrompt = result || DEFAULT_PROMPT
-    await saveToDisk()
+  const picked = await vscode.window.showQuickPick(
+    [
+      {
+        label: "$(code) Code Review",
+        detail: "Issues, questions, required changes — implement all",
+        prompt: DEFAULT_PROMPT,
+      },
+      {
+        label: "$(wrench) Refactor",
+        detail: "Identify improvements and implement them",
+        prompt:
+          "Refactor the annotated code. Each annotation describes an improvement. Implement all changes.",
+      },
+      {
+        label: "$(book) Explain",
+        detail: "Explain what the annotated sections do",
+        prompt:
+          "Explain the annotated sections of code. Each annotation marks an area to explain clearly.",
+      },
+      {
+        label: "$(edit) Custom…",
+        detail: savedPrompt,
+        prompt: CUSTOM_PROMPT_SENTINEL,
+      },
+    ],
+    { title: "Review Prompt", placeHolder: "Choose a template" },
+  )
+  if (!picked) return
+  if (picked.prompt === CUSTOM_PROMPT_SENTINEL) {
+    const result = await vscode.window.showInputBox({
+      prompt: "Custom review prompt",
+      value: savedPrompt,
+    })
+    if (result !== undefined) savedPrompt = result || DEFAULT_PROMPT
+  } else {
+    savedPrompt = picked.prompt
   }
+  await saveToDisk()
 }
 
 const buildPayload = () => `${savedPrompt}\n\n${renderMarkdown(threads)}`
@@ -249,16 +296,15 @@ const copyToClipboard = async () => {
   vscode.window.showInformationMessage("revu: review copied to clipboard.")
 }
 
+const REVIEW_URI = vscode.Uri.from({ scheme: "revu", path: "/revu-review.md" })
+
 const exportMarkdown = async () => {
   if (threads.length === 0) {
     vscode.window.showInformationMessage("revu: no annotations to export.")
     return
   }
-  const folders = vscode.workspace.workspaceFolders
-  if (!folders) return
-  const uri = vscode.Uri.joinPath(folders[0].uri, "revu-review.md")
-  await vscode.workspace.fs.writeFile(uri, Buffer.from(buildPayload()))
-  await vscode.commands.executeCommand("markdown.showPreview", uri)
+  reviewProvider.update()
+  await vscode.commands.executeCommand("markdown.showPreview", REVIEW_URI)
 }
 
 const exportReview = async () => {
@@ -296,6 +342,7 @@ const cycleView = () => {
 
 const refresh = () => {
   notesProvider.refresh()
+  reviewProvider?.update()
   const count = threads.length
   treeView.badge =
     count > 0
@@ -321,8 +368,7 @@ const renderMarkdown = (commentThreads: vscode.CommentThread[]): string => {
       const items = [...fileThreads].sort(byLine).flatMap((thread) => {
         const start = (thread.range?.start.line ?? 0) + 1
         const end = (thread.range?.end.line ?? 0) + 1
-        const lineRef =
-          start === end ? `line ${start}` : `lines ${start}–${end}`
+        const lineRef = start === end ? `Ln ${start}` : `Ln ${start}–${end}`
         return thread.comments.map((c) => {
           const body =
             c.body instanceof vscode.MarkdownString ? c.body.value : c.body
@@ -393,32 +439,57 @@ class NoteItem extends vscode.TreeItem {
     const file = vscode.workspace.asRelativePath(thread.uri)
     const start = (thread.range?.start.line ?? 0) + 1
     const end = (thread.range?.end.line ?? 0) + 1
-    const lines = start === end ? `line ${start}` : `lines ${start}–${end}`
+    const lines = start === end ? `Ln ${start}` : `Ln ${start}–${end}`
     const firstComment = thread.comments[0]
     const rawPreview = firstComment
       ? firstComment.body instanceof vscode.MarkdownString
         ? firstComment.body.value
         : (firstComment.body as string)
       : ""
-    const preview = rawPreview
-      ? rawPreview.length > 60
-        ? rawPreview.slice(0, 60) + "…"
-        : rawPreview
+    const flat = rawPreview.replace(/\s+/g, " ").trim()
+    const preview = flat
+      ? flat.length > 60
+        ? flat.slice(0, 60) + "…"
+        : flat
       : "…"
 
     super(
       fileInDescription ? lines : `${file}:${start}`,
       vscode.TreeItemCollapsibleState.None,
     )
+    const gitApi = vscode.extensions
+      .getExtension("vscode.git")
+      ?.exports?.getAPI(1)
+    const repo = gitApi?.getRepository(thread.uri)
+    const hasChange =
+      repo?.state.workingTreeChanges.some(
+        (c: { uri: vscode.Uri }) => c.uri.fsPath === thread.uri.fsPath,
+      ) ?? false
+
     this.description = preview
     this.tooltip = preview
-    this.iconPath = new vscode.ThemeIcon("comment")
+    this.iconPath = new vscode.ThemeIcon(
+      hasChange ? "diff-modified" : "comment",
+    )
     this.contextValue = "revuNote"
     this.command = {
       command: "revu.goToNote",
       title: "Go to note",
       arguments: [this],
     }
+  }
+}
+
+class ReviewContentProvider implements vscode.TextDocumentContentProvider {
+  private _onDidChange = new vscode.EventEmitter<vscode.Uri>()
+  readonly onDidChange = this._onDidChange.event
+
+  provideTextDocumentContent(): string {
+    return threads.length === 0 ? "*No annotations yet.*" : buildPayload()
+  }
+
+  update() {
+    this._onDidChange.fire(REVIEW_URI)
   }
 }
 

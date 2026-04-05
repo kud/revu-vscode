@@ -83,7 +83,7 @@
         "command": "revu.editPrompt",
         "title": "Edit Review Prompt",
         "category": "revu",
-        "icon": "$(edit)"
+        "icon": "$(sparkle)"
       },
       {
         "command": "revu.deleteAnnotation",
