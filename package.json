@@ -2,7 +2,7 @@
   "name": "revu-vscode",
   "displayName": "revu",
   "description": "Annotate code, export reviews to AI",
-  "version": "0.2.0",
+  "version": "1.0.0",
   "publisher": "kud",
   "license": "MIT",
   "repository": {
@@ -185,7 +185,11 @@
     "typecheck": "tsc --noEmit",
     "clean": "rm -f build/*.vsix",
     "package": "vsce package --no-dependencies --out build/",
-    "install-ext": "npm run build && npm run clean && npm run package && code --install-extension build/revu-vscode-*.vsix --force"
+    "install-ext": "npm run build && npm run clean && npm run package && code --install-extension build/revu-vscode-*.vsix --force",
+    "release:patch": "npm version patch --no-git-tag-version && V=$(node -p \"require('./package.json').version\") && git add package.json package-lock.json && git commit -m \"🔖 chore(release): bump to $V\" && git tag \"v$V\" && git push && git push --tags && echo \"Bumped to v$V\"",
+    "release:minor": "npm version minor --no-git-tag-version && V=$(node -p \"require('./package.json').version\") && git add package.json package-lock.json && git commit -m \"🔖 chore(release): bump to $V\" && git tag \"v$V\" && git push && git push --tags && echo \"Bumped to v$V\"",
+    "release:major": "npm version major --no-git-tag-version && V=$(node -p \"require('./package.json').version\") && git add package.json package-lock.json && git commit -m \"🔖 chore(release): bump to $V\" && git tag \"v$V\" && git push && git push --tags && echo \"Bumped to v$V\"",
+    "marketplace": "npm run build && npm run package && open https://marketplace.visualstudio.com/manage/publishers/kud"
   },
   "devDependencies": {
     "@types/node": "^25",
