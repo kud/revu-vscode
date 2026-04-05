@@ -2,7 +2,7 @@
   "name": "revu-vscode",
   "displayName": "revu",
   "description": "Annotate code, export reviews to AI",
-  "version": "0.1.4",
+  "version": "0.2.0",
   "publisher": "kud",
   "license": "MIT",
   "repository": {
