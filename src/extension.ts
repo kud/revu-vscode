@@ -35,7 +35,7 @@ export const activate = async (context: vscode.ExtensionContext) => {
     vscode.StatusBarAlignment.Right,
     100,
   )
-  statusBar.command = "revu.exportReview"
+  statusBar.command = "revu.exportToChat"
 
   notesProvider = new RevuNotesProvider()
   reviewProvider = new ReviewContentProvider()
@@ -54,7 +54,7 @@ export const activate = async (context: vscode.ExtensionContext) => {
     vscode.commands.registerCommand("revu.addComment", addComment),
     vscode.commands.registerCommand("revu.createNote", createNote),
     vscode.commands.registerCommand("revu.copyToClipboard", copyToClipboard),
-    vscode.commands.registerCommand("revu.exportReview", exportReview),
+    vscode.commands.registerCommand("revu.exportToChat", exportToChat),
     vscode.commands.registerCommand("revu.exportMarkdown", exportMarkdown),
     vscode.commands.registerCommand("revu.clearComments", clearComments),
     vscode.commands.registerCommand("revu.goToNote", goToNote),
@@ -307,14 +307,49 @@ const exportMarkdown = async () => {
   await vscode.commands.executeCommand("markdown.showPreview", REVIEW_URI)
 }
 
-const exportReview = async () => {
+const sendToCopilot = () =>
+  vscode.commands.executeCommand("workbench.action.chat.open", {
+    query: buildPayload(),
+  })
+
+const sendToClaudeCode = async () => {
+  const folders = vscode.workspace.workspaceFolders
+  if (!folders) {
+    vscode.window.showErrorMessage("revu: no workspace folder open.")
+    return
+  }
+  const uri = vscode.Uri.joinPath(folders[0].uri, "revu-review.md")
+  await vscode.workspace.fs.writeFile(uri, Buffer.from(buildPayload(), "utf8"))
+  await vscode.window.showTextDocument(uri)
+  await vscode.commands.executeCommand("claude-vscode.sidebar.open")
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: "revu: loading Claude Code…",
+    },
+    () => new Promise((resolve) => setTimeout(resolve, 1500)),
+  )
+  await vscode.commands.executeCommand("claude-vscode.insertAtMention")
+  vscode.window.showInformationMessage(
+    "revu: file added — press Enter in Claude Code to send.",
+  )
+}
+
+const exportToChat = async () => {
   if (threads.length === 0) {
     vscode.window.showInformationMessage("revu: no annotations to export.")
     return
   }
-  vscode.commands.executeCommand("workbench.action.chat.open", {
-    query: buildPayload(),
-  })
+  const picked = await vscode.window.showQuickPick(
+    [
+      { label: "$(copilot) Copilot", id: "copilot" },
+      { label: "$(robot) Claude Code", id: "claude" },
+    ],
+    { title: "Send to Chat", placeHolder: "Choose a chat client" },
+  )
+  if (!picked) return
+  if (picked.id === "copilot") sendToCopilot()
+  else await sendToClaudeCode()
 }
 
 const clearComments = async () => {
@@ -356,7 +391,7 @@ const refresh = () => {
     return
   }
   statusBar.text = `$(comment-discussion) ${count} revu note${count === 1 ? "" : "s"}`
-  statusBar.tooltip = "revu: click to send to Copilot"
+  statusBar.tooltip = "revu: click to send to chat"
   statusBar.show()
 }
 

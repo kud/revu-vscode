@@ -40,10 +40,10 @@
         "icon": "$(clippy)"
       },
       {
-        "command": "revu.exportReview",
-        "title": "Send to Copilot",
+        "command": "revu.exportToChat",
+        "title": "Send to Chat",
         "category": "revu",
-        "icon": "$(comment-discussion)"
+        "icon": "$(send)"
       },
       {
         "command": "revu.exportMarkdown",
@@ -169,12 +169,12 @@
       ],
       "view/title": [
         {
-          "command": "revu.editPrompt",
+          "command": "revu.cycleView",
           "group": "navigation@1",
           "when": "view == revu.notes"
         },
         {
-          "command": "revu.cycleView",
+          "command": "revu.editPrompt",
           "group": "navigation@2",
           "when": "view == revu.notes"
         },
@@ -184,12 +184,12 @@
           "when": "view == revu.notes"
         },
         {
-          "command": "revu.exportReview",
+          "command": "revu.exportMarkdown",
           "group": "navigation@4",
           "when": "view == revu.notes"
         },
         {
-          "command": "revu.exportMarkdown",
+          "command": "revu.exportToChat",
           "group": "navigation@5",
           "when": "view == revu.notes"
         },
