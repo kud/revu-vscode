@@ -1,13 +1,13 @@
 ---
-title: Export destinations
+title: 📤 Export destinations
 description: The chat clients and output formats revu can send a review to.
 ---
 
-## Overview
+## 🗺️ Overview
 
 revu turns your annotations into a single prompt-led Markdown payload and delivers it through one of the destinations below. Each is triggered from a button in the revu sidebar.
 
-## Send to Chat
+## 💬 Send to Chat
 
 The **Send to Chat** button opens a picker with two AI chat clients:
 
@@ -16,15 +16,15 @@ The **Send to Chat** button opens a picker with two AI chat clients:
 
 The status bar also shows a live annotation count; clicking it triggers **Send to Chat**.
 
-## Copy to Clipboard
+## 📋 Copy to Clipboard
 
 The **Copy to Clipboard** button writes the full prompt-led Markdown payload to the system clipboard, ready to paste into any tool.
 
-## Export as Markdown
+## 📝 Export as Markdown
 
 The **Export as Markdown** button opens the review as a rendered Markdown preview inside VS Code, backed by a virtual `revu-review.md` document.
 
-## Files revu writes
+## 📁 Files revu writes
 
 - `revu-review.md` — written at the workspace root when exporting to Claude Code (visible in the file tree).
 - `.revu.json` — the annotation store at the workspace root, shared with revu-cli (hidden by default).
