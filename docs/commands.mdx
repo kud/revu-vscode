@@ -1,0 +1,34 @@
+---
+title: Commands and settings
+description: The command-palette entries and keybinding revu contributes to VS Code.
+---
+
+## Commands
+
+These are the commands revu contributes, all under the `revu` category.
+
+| Command               | Description                                                               |
+| --------------------- | ------------------------------------------------------------------------- |
+| Add Annotation        | Annotate the current line or selection.                                   |
+| Copy to Clipboard     | Copy the prompt-led review Markdown to the clipboard.                     |
+| Send to Chat          | Send the review to a chat client (Copilot or Claude Code).                |
+| Export as Markdown    | Open the review as a rendered Markdown preview.                           |
+| Clear All Annotations | Remove every annotation after a confirmation prompt.                      |
+| Cycle View Mode       | Toggle the sidebar between flat and grouped-by-file views.                |
+| Edit Annotation       | Edit an existing annotation inline.                                       |
+| Edit Review Prompt    | Choose a review prompt template (Code Review, Refactor, Explain, Custom). |
+| Delete Annotation     | Delete a single annotation.                                               |
+
+The remaining contributed commands — Save Annotation and Cancel Edit — are surfaced inline while editing an annotation rather than from the command palette.
+
+## Keybinding
+
+| Action         | macOS         | Windows / Linux |
+| -------------- | ------------- | --------------- |
+| Add Annotation | `Cmd+Shift+N` | `Ctrl+Shift+N`  |
+
+The keybinding is active when the editor has text focus.
+
+## Settings
+
+revu contributes no configuration settings. The review prompt is chosen through the **Edit Review Prompt** command and persisted to `.revu.json` in the workspace.

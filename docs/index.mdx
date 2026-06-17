@@ -1,0 +1,26 @@
+---
+title: revu for VS Code
+description: Annotate any line of code and export your review to an AI chat client.
+---
+
+<p align="center">
+  <img src="../assets/revu-logo.png" width="120" alt="revu logo" />
+</p>
+
+## What is revu
+
+revu is a VS Code extension for the AI-assisted coding workflow. You review what the AI wrote, annotate the lines that need attention, and export the whole review back to an AI chat client in one step.
+
+Annotations live as inline comment threads in the editor and are mirrored in a dedicated sidebar panel. When you are ready, revu renders every annotation into a single Markdown payload — prefixed with a review prompt — and sends it to Copilot or Claude Code, copies it to the clipboard, or opens it as a Markdown preview.
+
+## Who it is for
+
+Developers who pair with AI agents and want a fast, structured way to hand feedback back to the model — file by file, line by line — without copy-pasting snippets by hand.
+
+## What problem it solves
+
+Reviewing AI-generated code usually means scattering notes across the editor and then manually assembling them into a prompt. revu collects those notes as you go and turns them into a clean, prompt-led Markdown review that an AI can act on directly.
+
+## Annotations persist
+
+Annotations are saved to `.revu.json` at the workspace root, so they survive across sessions. This file is shared with [revu-cli](https://github.com/kud/revu-cli), the terminal version of revu that works over SSH.

@@ -1,0 +1,36 @@
+---
+title: How it works
+description: The flow from selecting code to exporting a prompt-led Markdown review.
+---
+
+## The flow
+
+1. **Select** one or more lines in any file.
+2. **Annotate** — click the comment-add button in the editor title bar, press `Cmd+Shift+N` (`Ctrl+Shift+N` on Windows/Linux), or right-click and choose **revu: Add Annotation**.
+3. **Type** your note in the comment thread and submit. The annotation appears inline in the gutter and in the revu sidebar.
+4. **Export** — open the revu sidebar in the activity bar, optionally pick a review prompt, then send the review to a chat client, copy it, or preview it as Markdown.
+
+## What revu produces
+
+Every annotation is rendered into a single Markdown payload, grouped by file and ordered by line. The payload is prefixed with a review prompt so the AI knows what to do with it:
+
+```md
+Code review — inline annotations per file and line. Each annotation is an issue, question, or required change. Implement all changes.
+
+## src/auth.ts
+
+- **Ln 12** — use verifyPassword instead of hashPassword, it's timing-safe
+- **Ln 28** — missing rate limiting before this DB call
+
+## src/api.ts
+
+- **Ln 6** — session ID should come from a signed cookie, not a plain header
+```
+
+## Choosing the prompt
+
+The **Edit Review Prompt** button in the sidebar offers three templates — Code Review, Refactor, and Explain — plus a Custom option where you write your own. The chosen prompt is persisted to `.revu.json` and reused for every export until you change it.
+
+## The sidebar panel
+
+The revu sidebar lists every annotation. Click any entry to jump straight to its line. The panel has two view modes — flat and grouped by file — toggled with the **Cycle View Mode** button. Annotations on files with uncommitted changes are flagged with a modified-diff icon.
