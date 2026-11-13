@@ -9,7 +9,7 @@
     "type": "git",
     "url": "https://github.com/kud/revu-vscode"
   },
-  "homepage": "https://marketplace.visualstudio.com/items?itemName=kud.revu-vscode",
+  "homepage": "https://kud.io/projects/revu-vscode",
   "engines": {
     "vscode": "^1.110.0"
   },
